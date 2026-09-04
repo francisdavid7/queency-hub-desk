@@ -1,54 +1,26 @@
-type ReceiptStep =
-  | "customer"
-  | "new-customer"
-  | "services"
-  | "review"
-  | "payment"
-  | "preview";
+"use client";
+import StepsProgress from "@/components/reciept/steps-progress";
+import Header from "@/components/shared/header";
+import { useState } from "react";
 
-const steps = [
-  {
-    id: 1,
-    title: "Customer",
-    description: "Find or add customer",
-  },
-  {
-    id: 2,
-    title: "Services",
-    description: "Add services",
-  },
-  {
-    id: 3,
-    title: "Review",
-    description: "Check order",
-  },
-  {
-    id: 4,
-    title: "Payment",
-    description: "Collect payment",
-  },
-  {
-    id: 5,
-    title: "Receipt",
-    description: "Generate & print",
-  },
-];
+export type ReceiptStep =
+  | "customer"
+  | "services"
+  | "payment"
+  | "review"
+  | "receipt";
 
 function CreateReceipt() {
+  const [step, setStep] = useState<ReceiptStep>("customer");
   return (
     <section className="">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-            Create New Receipt
-          </h1>
+      <Header
+        heading="Create New Receipt"
+        description="Generate a new receipt for a client."
+      />
 
-          <p className="text-sm text-muted-foreground">
-            Generate a new receipt for a client.
-          </p>
-        </div>
-      </div>
+      <StepsProgress currentStep={step} />
     </section>
   );
 }
