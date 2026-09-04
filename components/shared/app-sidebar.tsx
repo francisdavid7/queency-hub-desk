@@ -40,7 +40,7 @@ export const sidebarItems: SidebarItem[] = [
   },
   {
     title: "Create Receipt",
-    href: "/receipts/create",
+    href: "/receipts/new",
     icon: SquarePlus,
   },
   {
@@ -80,9 +80,7 @@ function AppSideBar() {
             {sidebarItems.map((item) => {
               const Icon = item.icon;
 
-              const isActive =
-                pathname === item.href ||
-                (pathname !== "/dashboard" && pathname.startsWith(item.href));
+              const isActive = pathname === item.href;
 
               return (
                 <SidebarMenuItem key={item.href}>

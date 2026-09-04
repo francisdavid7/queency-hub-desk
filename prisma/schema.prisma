@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  CASHIER
+}
+
+model User {
+  id        String   @id @default(uuid())
+  userName  String   @default("CASHIER")
+  password  String
+  role      Role     @default(CASHIER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Customer {
+  id    String  @id
+  name  String
+  phone String
+  email String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  receipts Receipt[]
+}
+
+model Receipt {
+  id            String  @id
+  receiptNumber String
+  customerId    String?
+
+  date  DateTime
+  total Float
+
+  paymentMethod PAYMENTMETHOD
+  status        RECEIPTSTATUS
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  receiptItems ReceiptItem[]
+  customer     Customer?     @relation(fields: [customerId], references: [id])
+}
+
+model ReceiptItem {
+  id String @id
+
+  receiptId String
+  receipt   Receipt @relation(fields: [receiptId], references: [id])
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  quantity  String
+  unitPrice Int
+  amount    Float
+
+  createAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Service {
+  id       String @id
+  name     String
+  category String
+  price    Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items ReceiptItem[]
+}
+
+enum RECEIPTSTATUS {
+  COMPLETED
+  PENDING
+  CANCELLED
+}
+
+enum PAYMENTMETHOD {
+  CASH
+  TRANSFER
+  POS
+}

@@ -1,10 +1,13 @@
-import DashboardHeader from "@/components/dashboard/dashboard-header";
+import DashboardHeader from "@/components/shared/dashboard-header";
+import DashboardOverview from "@/components/dashboard/dashboard-overview";
+import RecentTransactionsSection from "@/components/dashboard/recent-transaction-section";
 
 function Dashboard() {
   return (
-    <main>
-      <DashboardHeader />
-    </main>
+    <section>
+      <DashboardOverview />
+      <RecentTransactionsSection />
+    </section>
   );
 }
 

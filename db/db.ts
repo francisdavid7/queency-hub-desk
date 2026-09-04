@@ -1,43 +1,14 @@
 import Dexie, { type EntityTable } from "dexie";
+import type { Customer } from "@/types/customer";
+import type { Receipt } from "@/types/receipt";
+import type { Service } from "@/types/service";
+import type { ReceiptItem } from "@/types/receipt-item";
 
-type PaymentMethod = "CASH" | "TRANSFER" | "POS";
+export type PaymentMethod = "CASH" | "TRANSFER" | "POS";
+export type ReceiptStatus = "Completed" | "Pending" | "Cancelled";
+export type SyncStatus = "pending" | "synced" | "failed";
 
-type ReceiptStatus = "Completed" | "Pending" | "Cancelled";
-
-interface Customer {
-  id?: number;
-  name: string;
-  phone: string;
-  email?: string;
-}
-
-interface Receipt {
-  id?: number;
-  receiptNumber: string;
-  customerId: number;
-  date: string;
-  total: number;
-  paymentMethod: PaymentMethod;
-  status: ReceiptStatus;
-}
-
-interface ReceiptItem {
-  id?: number;
-  receiptId: number;
-  serviceId: number;
-  quantity: number;
-  unitPrice: number;
-  amount: number;
-}
-
-interface Service {
-  id?: number;
-  name: string;
-  category: string;
-  price: number;
-}
-
-const db = new Dexie("queencyHubDB") as Dexie & {
+const db = new Dexie("HubFlowDB") as Dexie & {
   customers: EntityTable<Customer, "id">;
   receipts: EntityTable<Receipt, "id">;
   receiptItems: EntityTable<ReceiptItem, "id">;
@@ -45,7 +16,9 @@ const db = new Dexie("queencyHubDB") as Dexie & {
 };
 
 db.version(1).stores({
-  customers: "++id, name, email",
-  receipts: "++id, receiptNumber, date",
-  receiptItems: "++id, receiptId, serviceId",
+  customers: "id, name, phone, syncStatus, updatedAt",
+  services: "id, name, category, syncStatus, updatedAt",
+  receipts:
+    "id, receiptNumber, customerId, date, status, syncStatus, updatedAt",
+  receiptItems: "id, receiptId, serviceId, syncStatus, updatedAt",
 });
