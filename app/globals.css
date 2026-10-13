@@ -32,6 +32,7 @@
   --border: #e6eaf0;
   --input: #e6eaf0;
   --ring: #1d63f4;
+  --overlay: rgb(15 23 42 / 10%);
 
   /* Destructive */
   --destructive: #ef4444;
@@ -89,6 +90,7 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  --overlay: rgb(0 0 0 / 45%);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -132,6 +134,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-overlay: var(--overlay);
 
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);

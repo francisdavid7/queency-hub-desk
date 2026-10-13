@@ -105,7 +105,7 @@ export default function RecentTransactionsSection() {
                   gap-3
                   rounded-lg
                   border-input
-                  bg-white
+                  bg-card
                   font-medium
                   shadow-none
                   hover:bg-muted/50

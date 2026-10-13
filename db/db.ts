@@ -3,12 +3,14 @@ import type { Customer } from "@/types/customer";
 import type { Receipt } from "@/types/receipt";
 import type { Service } from "@/types/service";
 import type { ReceiptItem } from "@/types/receipt-item";
+import { User } from "@/types/user";
 
 export type PaymentMethod = "CASH" | "TRANSFER" | "POS";
 export type ReceiptStatus = "Completed" | "Pending" | "Cancelled";
 export type SyncStatus = "pending" | "synced" | "failed";
 
 const db = new Dexie("HubFlowDB") as Dexie & {
+  users: EntityTable<User, "id">;
   customers: EntityTable<Customer, "id">;
   receipts: EntityTable<Receipt, "id">;
   receiptItems: EntityTable<ReceiptItem, "id">;
@@ -16,9 +18,18 @@ const db = new Dexie("HubFlowDB") as Dexie & {
 };
 
 db.version(1).stores({
+  users: "id, role",
   customers: "id, name, phone, syncStatus, updatedAt",
   services: "id, name, category, syncStatus, updatedAt",
   receipts:
     "id, receiptNumber, customerId, date, status, syncStatus, updatedAt",
   receiptItems: "id, receiptId, serviceId, syncStatus, updatedAt",
 });
+
+db.open()
+  .then()
+  .catch((err) => {
+    console.log("Error occured establishing db", err);
+  });
+
+export { db };

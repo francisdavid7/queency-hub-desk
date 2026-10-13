@@ -1,6 +1,9 @@
 "use client";
+import FindCustomer from "@/components/reciept/find-customer";
+import PreviewPane from "@/components/reciept/preview-pane";
 import StepsProgress from "@/components/reciept/steps-progress";
 import Header from "@/components/shared/header";
+import { db } from "@/db/db";
 import { useState } from "react";
 
 export type ReceiptStep =
@@ -12,6 +15,7 @@ export type ReceiptStep =
 
 function CreateReceipt() {
   const [step, setStep] = useState<ReceiptStep>("customer");
+
   return (
     <section className="">
       {/* Header */}
@@ -21,6 +25,11 @@ function CreateReceipt() {
       />
 
       <StepsProgress currentStep={step} />
+
+      <main className="mt-6 flex gap-3">
+        <FindCustomer />
+        <PreviewPane />
+      </main>
     </section>
   );
 }

@@ -32,7 +32,7 @@ const steps = [
 
 function StepsProgress({ currentStep }: { currentStep: ReceiptStep }) {
   return (
-    <div className="mt-4 flex items-center gap-4">
+    <div className="mt-4 flex items-center gap-4 p-4 border rounded-lg border-input bg-card">
       {steps.map((step) => {
         const isActive = step.title.toLowerCase() === currentStep;
 
@@ -41,9 +41,9 @@ function StepsProgress({ currentStep }: { currentStep: ReceiptStep }) {
         );
 
         return (
-          <div key={step.id} className="flex items-center gap-1">
+          <div key={step.id} className="flex items-center gap-2">
             <span
-              className={`w-9 h-9 rounded-full flex items-center justify-center ${isActive ? "bg-primary text-primary-foreground" : "border-2 border-input"} ${activeStep && step.id < activeStep.id ? "bg-success text-success-foreground" : "border-0"}`}
+              className={`w-9 h-9 rounded-full flex items-center justify-center ${isActive ? "bg-primary text-primary-foreground font-bold" : "border-2 border-input"} ${activeStep && step.id < activeStep.id ? "bg-success text-success-foreground" : "border-0"}`}
             >
               {activeStep && step.id < activeStep.id ? (
                 <Check size={15} />
@@ -58,7 +58,7 @@ function StepsProgress({ currentStep }: { currentStep: ReceiptStep }) {
               </p>
             </div>
             {step.border !== false && (
-              <span className="block w-16 h-0.5 bg-primary/50"></span>
+              <span className="block w-12 h-0.5 bg-primary/50"></span>
             )}
           </div>
         );
