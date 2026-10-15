@@ -205,22 +205,96 @@
   }
 }
 
+#receipt-print-portal {
+  display: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
 @media print {
-  body * {
-    visibility: hidden;
+  html,
+  body {
+    width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
   }
 
-  #receipt-print,
-  #receipt-print * {
-    visibility: visible;
+  body * {
+    visibility: hidden !important;
+  }
+
+  body > :not(#receipt-print-portal) {
+    display: none !important;
+  }
+
+  #receipt-print[data-receipt-source] {
+    display: none !important;
+  }
+
+  #receipt-print-portal,
+  #receipt-print-portal * {
+    visibility: visible !important;
+  }
+
+  #receipt-print-portal {
+    box-sizing: border-box !important;
+    position: relative !important;
+    display: block !important;
+    width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 10mm !important;
+    background: #fff !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   #receipt-print {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    max-width: none;
-    border: 0;
-    box-shadow: none;
+    --background: #fff;
+    --foreground: #0f172a;
+    --card: #fff;
+    --card-foreground: #0f172a;
+    --muted: #f3f5f8;
+    --muted-foreground: #475569;
+    --border: #dbe2ea;
+    --accent: #eaf1ff;
+    --accent-foreground: #1d63f4;
+    --primary: #1d63f4;
+    --warning: #b45309;
+
+    position: relative !important;
+    inset: auto !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 190mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 auto !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    break-inside: auto;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  #receipt-print .receipt-item-row {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  #receipt-print-portal img {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }

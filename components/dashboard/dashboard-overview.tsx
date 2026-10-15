@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
+  ArrowDownRight,
+  ArrowUpRight,
   Banknote,
   BriefcaseBusiness,
   CalendarDays,
@@ -11,7 +13,6 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { db } from "@/db/db";
 import type { Receipt } from "@/types/receipt";
 
@@ -22,9 +23,8 @@ const formatPrice = (amount: number) =>
     minimumFractionDigits: 2,
   }).format(amount);
 
-function isSameDay(left: string | Date, right: Date) {
-  return new Date(left).toDateString() === right.toDateString();
-}
+const dayStart = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
 function receiptRevenue(receipt: Receipt) {
   if (receipt.status === "Cancelled") return 0;
@@ -34,218 +34,225 @@ function receiptRevenue(receipt: Receipt) {
   );
 }
 
+function changeLabel(current: number, previous: number) {
+  if (current === 0 && previous === 0) return "No change this week";
+  if (previous === 0) return current > 0 ? "New this week" : "No change this week";
+  const change = ((current - previous) / previous) * 100;
+  const rounded = Math.round(Math.abs(change));
+
+  return `${change >= 0 ? "+" : "−"}${rounded}% from last week`;
+}
+
 function DashboardOverview() {
   const receipts = useLiveQuery(() => db.receipts.toArray(), [], []);
   const customers = useLiveQuery(() => db.customers.toArray(), [], []);
-  const metrics = useMemo(() => {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+  const services = useLiveQuery(() => db.services.toArray(), [], []);
+  const [currentDate, setCurrentDate] = useState<Date | null>(null);
 
-    const todayReceipts = receipts.filter((receipt) =>
-      isSameDay(receipt.date, today),
-    );
-    const yesterdayReceipts = receipts.filter((receipt) =>
-      isSameDay(receipt.date, yesterday),
-    );
-    const todayRevenue = todayReceipts.reduce(
-      (sum, receipt) => sum + receiptRevenue(receipt),
-      0,
-    );
-    const yesterdayRevenue = yesterdayReceipts.reduce(
-      (sum, receipt) => sum + receiptRevenue(receipt),
-      0,
-    );
-    const newCustomersToday = customers.filter((customer) =>
-      isSameDay(customer.createdAt, today),
-    ).length;
-    const newCustomersYesterday = customers.filter((customer) =>
-      isSameDay(customer.createdAt, yesterday),
-    ).length;
+  useEffect(() => {
+    const updateDate = () => setCurrentDate(new Date());
+    updateDate();
+    const timer = window.setInterval(updateDate, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const metrics = useMemo(() => {
+    const now = currentDate ?? new Date();
+    const today = dayStart(now).getTime();
+    const week = 7 * 24 * 60 * 60 * 1000;
+    const thisWeekStart = today - 6 * 24 * 60 * 60 * 1000;
+    const lastWeekStart = thisWeekStart - week;
+
+    const receiptsThisWeek = receipts.filter((receipt) => {
+      const time = new Date(receipt.date).getTime();
+      return time >= thisWeekStart && time <= now.getTime();
+    });
+    const receiptsLastWeek = receipts.filter((receipt) => {
+      const time = new Date(receipt.date).getTime();
+      return time >= lastWeekStart && time < thisWeekStart;
+    });
+    const customersThisWeek = customers.filter((customer) => {
+      const time = new Date(customer.createdAt).getTime();
+      return time >= thisWeekStart && time <= now.getTime();
+    });
+    const customersLastWeek = customers.filter((customer) => {
+      const time = new Date(customer.createdAt).getTime();
+      return time >= lastWeekStart && time < thisWeekStart;
+    });
+    const servicesThisWeek = services.filter((service) => {
+      const time = new Date(service.createdAt).getTime();
+      return time >= thisWeekStart && time <= now.getTime();
+    });
+    const servicesLastWeek = services.filter((service) => {
+      const time = new Date(service.createdAt).getTime();
+      return time >= lastWeekStart && time < thisWeekStart;
+    });
 
     return {
-      todayRevenue,
-      yesterdayRevenue,
-      todayReceiptCount: todayReceipts.length,
-      yesterdayReceiptCount: yesterdayReceipts.length,
-      pendingReceiptCount: receipts.filter(
-        (receipt) => receipt.status === "Pending",
-      ).length,
-      newCustomersToday,
-      newCustomersYesterday,
+      totalRevenue: receipts.reduce(
+        (sum, receipt) => sum + receiptRevenue(receipt),
+        0,
+      ),
+      totalReceipts: receipts.length,
+      totalCustomers: customers.length,
+      totalServices: services.length,
+      revenueThisWeek: receiptsThisWeek.reduce(
+        (sum, receipt) => sum + receiptRevenue(receipt),
+        0,
+      ),
+      revenueLastWeek: receiptsLastWeek.reduce(
+        (sum, receipt) => sum + receiptRevenue(receipt),
+        0,
+      ),
+      receiptsThisWeek: receiptsThisWeek.length,
+      receiptsLastWeek: receiptsLastWeek.length,
+      customersThisWeek: customersThisWeek.length,
+      customersLastWeek: customersLastWeek.length,
+      servicesThisWeek: servicesThisWeek.length,
+      servicesLastWeek: servicesLastWeek.length,
     };
-  }, [customers, receipts]);
+  }, [currentDate, customers, receipts, services]);
 
-  const dateLabel = new Intl.DateTimeFormat("en-NG", {
-    dateStyle: "full",
-  }).format(new Date());
+  const greeting = currentDate
+    ? currentDate.getHours() < 12
+      ? "Good morning,"
+      : currentDate.getHours() < 18
+        ? "Good afternoon,"
+        : "Good evening,"
+    : "Welcome,";
+  const dateLabel = currentDate
+    ? new Intl.DateTimeFormat("en-NG", { dateStyle: "full" }).format(
+        currentDate,
+      )
+    : "";
 
   const stats = [
     {
-      title: "Today's Revenue",
-      value: formatPrice(metrics.todayRevenue),
-      icon: Banknote,
-      iconClass: "bg-info-muted text-info",
-      footer: comparisonText(
-        metrics.todayRevenue,
-        metrics.yesterdayRevenue,
-        formatPrice,
-      ),
-    },
-    {
-      title: "Receipts Today",
-      value: metrics.todayReceiptCount,
+      title: "Total Receipts",
+      value: metrics.totalReceipts.toLocaleString("en-NG"),
       icon: ReceiptText,
-      iconClass: "bg-purple-muted text-purple",
-      footer: countComparisonText(
-        metrics.todayReceiptCount,
-        metrics.yesterdayReceiptCount,
-        "receipt",
+      iconClass: "bg-info-muted text-info",
+      footer: changeLabel(
+        metrics.receiptsThisWeek,
+        metrics.receiptsLastWeek,
       ),
+      trend: metrics.receiptsThisWeek - metrics.receiptsLastWeek,
     },
     {
-      title: "Pending Receipts",
-      value: metrics.pendingReceiptCount,
-      icon: BriefcaseBusiness,
-      iconClass: "bg-warning-muted text-warning",
-      footer: (
-        <p className="text-xs text-muted-foreground">
-          {metrics.pendingReceiptCount === 0
-            ? "No outstanding payments"
-            : "Receipts with a remaining balance"}
-        </p>
-      ),
-    },
-    {
-      title: "New Customers Today",
-      value: metrics.newCustomersToday,
+      title: "Total Customers",
+      value: metrics.totalCustomers.toLocaleString("en-NG"),
       icon: Users,
       iconClass: "bg-success-muted text-success",
-      footer: countComparisonText(
-        metrics.newCustomersToday,
-        metrics.newCustomersYesterday,
-        "customer",
+      footer: changeLabel(
+        metrics.customersThisWeek,
+        metrics.customersLastWeek,
       ),
+      trend: metrics.customersThisWeek - metrics.customersLastWeek,
+    },
+    {
+      title: "Total Revenue",
+      value: formatPrice(metrics.totalRevenue),
+      icon: Banknote,
+      iconClass: "bg-purple-muted text-purple",
+      footer: changeLabel(
+        metrics.revenueThisWeek,
+        metrics.revenueLastWeek,
+      ),
+      trend: metrics.revenueThisWeek - metrics.revenueLastWeek,
+    },
+    {
+      title: "Total Services",
+      value: metrics.totalServices.toLocaleString("en-NG"),
+      icon: BriefcaseBusiness,
+      iconClass: "bg-warning-muted text-warning",
+      footer:
+        metrics.servicesThisWeek || metrics.servicesLastWeek
+          ? changeLabel(
+              metrics.servicesThisWeek,
+              metrics.servicesLastWeek,
+            )
+          : "No change this week",
+      trend: metrics.servicesThisWeek - metrics.servicesLastWeek,
     },
   ];
 
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <section className="space-y-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-            Dashboard
+          <p className="text-sm font-semibold text-primary">{greeting}</p>
+          <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Your business overview <span aria-hidden="true">👋</span>
           </h1>
-          <p className="text-sm text-muted-foreground">
-            An overview of your sales and activity today.
+          <p className="mt-1 text-sm text-muted-foreground">
+            Quickly manage receipts, customers and services. Keep your business
+            running smoothly.
           </p>
         </div>
-
-        <Button
-          type="button"
-          variant="outline"
-          className="h-10 w-fit gap-3 rounded-lg bg-card px-4 font-medium shadow-none"
-        >
-          <span>{dateLabel}</span>
-          <CalendarDays className="size-4 text-muted-foreground" />
-        </Button>
+        <div className="flex shrink-0 items-center gap-3 self-start rounded-xl border border-border bg-card px-3 py-2.5 sm:self-auto">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+            <CalendarDays className="size-4" />
+          </span>
+          <span className="text-sm font-medium">
+            {dateLabel}
+            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+              {currentDate
+                ? new Intl.DateTimeFormat("en-NG", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  }).format(currentDate)
+                : ""}
+            </span>
+          </span>
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => {
           const Icon = stat.icon;
+          const TrendIcon =
+            stat.trend > 0 ? ArrowUpRight : stat.trend < 0 ? ArrowDownRight : null;
 
           return (
             <Card
               key={stat.title}
               data-gsap-item
-              className="rounded-xl bg-card ring-0"
+              className="rounded-xl border-border bg-card shadow-sm"
             >
-              <CardContent className="flex min-h-30 flex-col justify-between p-5">
-                <div className="flex items-start gap-3">
+              <CardContent className="flex min-h-27 flex-col justify-between p-4 sm:p-5">
+                <div className="flex items-center gap-3">
                   <div
-                    className={`flex size-10 shrink-0 items-center justify-center rounded-full ${stat.iconClass}`}
+                    className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${stat.iconClass}`}
                   >
                     <Icon className="size-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-muted-foreground">
+                    <p className="text-xs font-medium text-muted-foreground">
                       {stat.title}
                     </p>
-                    <p className="mt-2 text-xl font-semibold tracking-tight text-foreground">
+                    <p className="mt-1 truncate text-xl font-bold tracking-tight text-foreground">
                       {stat.value}
                     </p>
                   </div>
                 </div>
-                <div className="ml-13 mt-4">{stat.footer}</div>
+                <p
+                  className={`mt-4 flex items-center gap-1 text-xs ${
+                    stat.trend > 0
+                      ? "text-success"
+                      : stat.trend < 0
+                        ? "text-destructive"
+                        : "text-muted-foreground"
+                  }`}
+                >
+                  {TrendIcon && <TrendIcon className="size-3.5" />}
+                  <span>{stat.footer}</span>
+                </p>
               </CardContent>
             </Card>
           );
         })}
       </div>
     </section>
-  );
-}
-
-function comparisonText(
-  current: number,
-  previous: number,
-  format: (value: number) => string,
-) {
-  const difference = current - previous;
-  if (difference === 0) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        Same as yesterday ({format(current)})
-      </p>
-    );
-  }
-
-  return (
-    <p className="text-xs text-muted-foreground">
-      <span
-        className={
-          difference > 0
-            ? "font-semibold text-success"
-            : "font-semibold text-destructive"
-        }
-      >
-        {difference > 0 ? "+" : "−"}
-        {format(Math.abs(difference))}
-      </span>{" "}
-      vs yesterday
-    </p>
-  );
-}
-
-function countComparisonText(
-  current: number,
-  previous: number,
-  item: string,
-) {
-  const difference = current - previous;
-  if (difference === 0) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        Same as yesterday ({current})
-      </p>
-    );
-  }
-
-  return (
-    <p className="text-xs text-muted-foreground">
-      <span
-        className={
-          difference > 0
-            ? "font-semibold text-success"
-            : "font-semibold text-destructive"
-        }
-      >
-        {difference > 0 ? "+" : "−"}
-        {Math.abs(difference)}
-      </span>{" "}
-      {item}{Math.abs(difference) === 1 ? "" : "s"} vs yesterday
-    </p>
   );
 }
 

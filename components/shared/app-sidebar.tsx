@@ -13,12 +13,14 @@ import {
 } from "../ui/sidebar";
 
 import {
+  ArrowLeftRight,
+  BarChart3,
   LayoutDashboard,
-  SquarePlus,
   ReceiptText,
   Users,
   Blocks,
   Settings,
+  SquarePlus,
   type LucideIcon,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -59,6 +61,16 @@ export const sidebarItems: SidebarItem[] = [
     icon: Blocks,
   },
   {
+    title: "Transactions",
+    href: "/transactions",
+    icon: ArrowLeftRight,
+  },
+  {
+    title: "Reports",
+    href: "/reports",
+    icon: BarChart3,
+  },
+  {
     title: "Settings",
     href: "/settings",
     icon: Settings,
@@ -79,7 +91,13 @@ function AppSideBar() {
             {sidebarItems.map((item) => {
               const Icon = item.icon;
 
-              const isActive = pathname === item.href;
+              const isActive =
+                pathname === item.href ||
+                (item.href !== "/dashboard" &&
+                  item.href !== "/receipts" &&
+                  pathname.startsWith(`${item.href}/`)) ||
+                (item.href === "/receipts" &&
+                  pathname.startsWith("/receipts/"));
 
               return (
                 <SidebarMenuItem key={item.href}>

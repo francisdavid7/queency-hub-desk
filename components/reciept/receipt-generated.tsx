@@ -60,60 +60,76 @@ function ReceiptGenerated({
   const change = Math.max(amountPaid - receipt.total, 0);
 
   const handlePrint = () => {
+    const receiptElement = document.getElementById("receipt-print");
+    if (!receiptElement) {
+      console.error(
+        "Unable to print receipt: printable content was not found.",
+      );
+      return;
+    }
+
+    const printPortal = document.createElement("div");
+    printPortal.id = "receipt-print-portal";
+    printPortal.setAttribute("aria-hidden", "true");
+    const printableReceipt = receiptElement.cloneNode(true) as HTMLElement;
+    printableReceipt.removeAttribute("data-receipt-source");
+    printPortal.appendChild(printableReceipt);
+    document.body.appendChild(printPortal);
+
     const originalTitle = document.title;
     document.title = getReceiptFilename(
       isWalkIn ? "Walk-in Customer" : customer?.name,
     );
 
-    window.addEventListener(
-      "afterprint",
-      () => {
-        document.title = originalTitle;
-      },
-      { once: true },
-    );
+    const cleanup = () => {
+      window.removeEventListener("afterprint", cleanup);
+      printPortal.remove();
+      document.title = originalTitle;
+    };
 
-    window.print();
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.requestAnimationFrame(() => window.print());
   };
 
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
       <Card
         id="receipt-print"
+        data-receipt-source
         className="relative isolate print:mx-auto print:max-w-2xl print:border-0 print:shadow-none"
       >
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -top-20 z-0 flex items-center justify-center overflow-hidden"
+          className="pointer-events-none absolute -top-20 z-0 flex items-center justify-center overflow-hidden print:opacity-100"
         >
           <Image
             src={logo}
             alt=""
-            className="h-auto w-[80%] opacity-[0.055] print:opacity-[0.07]"
+            className="h-auto w-[82%] opacity-[0.045] print:opacity-[0.055]"
             priority
           />
         </div>
 
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -bottom-20 z-0 flex items-center justify-center overflow-hidden"
+          className="pointer-events-none absolute -bottom-20 z-0 flex items-center justify-center overflow-hidden print:opacity-100"
         >
           <Image
             src={logo}
             alt=""
-            className="h-auto w-[80%] opacity-[0.055] print:opacity-[0.07]"
+            className="h-auto w-[82%] opacity-[0.045] print:opacity-[0.055]"
             priority
           />
         </div>
 
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden"
+          className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden print:opacity-100"
         >
           <Image
             src={logo}
             alt=""
-            className="h-auto w-[82%] opacity-[0.055] print:opacity-[0.07]"
+            className="h-auto w-[82%] opacity-[0.045] print:opacity-[0.055]"
             priority
           />
         </div>
@@ -174,7 +190,7 @@ function ReceiptGenerated({
               return (
                 <div
                   key={item.id}
-                  className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-t border-border px-3 py-3 text-sm"
+                  className="receipt-item-row grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-t border-border px-3 py-3 text-sm"
                 >
                   <span className="font-medium">
                     {item.serviceName ?? service?.name ?? "Service"}
@@ -252,11 +268,7 @@ function ReceiptGenerated({
           </p>
         </CardHeader>
         <CardContent className="space-y-2">
-          <Button
-            type="button"
-            className="w-full gap-2"
-            onClick={handlePrint}
-          >
+          <Button type="button" className="w-full gap-2" onClick={handlePrint}>
             <Printer className="size-4" />
             Print receipt
           </Button>

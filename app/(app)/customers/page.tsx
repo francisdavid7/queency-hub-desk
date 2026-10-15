@@ -11,6 +11,15 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -19,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { db } from "@/db/db";
+import { removeQueryParam, useQueryParam } from "@/hooks/custom/use-query-param";
 import { deleteCustomer } from "@/lib/actions/edge-functions";
 import type { Customer } from "@/types/customer";
 
@@ -29,12 +39,20 @@ function CustomersPage() {
     [],
   );
   const receipts = useLiveQuery(() => db.receipts.toArray(), [], []);
-  const [search, setSearch] = useState("");
+  const querySearch = useQueryParam("search");
+  const createParam = useQueryParam("create");
+  const [search, setSearch] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(
+    null,
+  );
+  const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
+
+  const searchValue = search ?? querySearch;
 
   const filteredCustomers = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = searchValue.trim().toLowerCase();
     if (!query) return customers;
     return customers.filter(
       (customer) =>
@@ -42,7 +60,7 @@ function CustomersPage() {
         customer.phone.toLowerCase().includes(query) ||
         customer.email?.toLowerCase().includes(query),
     );
-  }, [customers, search]);
+  }, [customers, searchValue]);
 
   const openAddDialog = () => {
     setEditingCustomer(null);
@@ -54,25 +72,22 @@ function CustomersPage() {
     setDialogOpen(true);
   };
 
-  const handleDelete = async (customer: Customer) => {
-    if (
-      !window.confirm(
-        `Delete ${customer.name}? Customers with receipt history cannot be deleted.`,
-      )
-    ) {
-      return;
-    }
-
+  const handleDelete = async () => {
+    if (!customerToDelete) return;
+    setIsDeletingCustomer(true);
     try {
-      await deleteCustomer(customer.id);
+      await deleteCustomer(customerToDelete.id);
       toast.success("Customer deleted", {
-        description: `${customer.name} has been removed.`,
+        description: `${customerToDelete.name} has been removed.`,
       });
+      setCustomerToDelete(null);
     } catch (error) {
       console.error("Failed to delete customer:", error);
       toast.error(
         error instanceof Error ? error.message : "Failed to delete customer",
       );
+    } finally {
+      setIsDeletingCustomer(false);
     }
   };
 
@@ -123,7 +138,7 @@ function CustomersPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="search"
-              value={search}
+              value={searchValue}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search name, phone, or email..."
               aria-label="Search customers"
@@ -194,7 +209,7 @@ function CustomersPage() {
                           variant="ghost"
                           size="icon-sm"
                           aria-label={`Delete ${customer.name}`}
-                          onClick={() => void handleDelete(customer)}
+                          onClick={() => setCustomerToDelete(customer)}
                           disabled={receiptCount > 0}
                         >
                           <Trash2 className="size-4 text-destructive" />
@@ -236,10 +251,53 @@ function CustomersPage() {
       </Card>
 
       <CustomerFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        open={dialogOpen || createParam === "1"}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open && createParam === "1") removeQueryParam("create");
+        }}
         customer={editingCustomer}
       />
+
+      <Dialog
+        open={customerToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingCustomer) setCustomerToDelete(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete customer?</DialogTitle>
+            <DialogDescription>
+              {customerToDelete
+                ? `Delete ${customerToDelete.name}? This action cannot be undone.`
+                : ""}
+              {" Customers with receipt history cannot be deleted."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose
+              render={
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isDeletingCustomer}
+                >
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isDeletingCustomer}
+              onClick={() => void handleDelete()}
+            >
+              {isDeletingCustomer ? "Deleting..." : "Delete customer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

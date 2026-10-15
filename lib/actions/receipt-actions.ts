@@ -125,3 +125,15 @@ export async function updateReceiptPayment(
 
   return updatedReceipt;
 }
+
+export async function deleteReceipt(receiptId: string) {
+  await db.transaction("rw", db.receipts, db.receiptItems, async () => {
+    const receipt = await db.receipts.get(receiptId);
+    if (!receipt) {
+      throw new Error(`Receipt ${receiptId} was not found.`);
+    }
+
+    await db.receiptItems.where("receiptId").equals(receiptId).delete();
+    await db.receipts.delete(receiptId);
+  });
+}

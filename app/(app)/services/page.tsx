@@ -18,6 +18,15 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -26,6 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { db } from "@/db/db";
+import { useQueryParam } from "@/hooks/custom/use-query-param";
 import { deleteService } from "@/lib/actions/service-actions";
 import type { Service } from "@/types/service";
 import ServiceFormDialog from "@/components/services/service-form-dialog";
@@ -59,14 +69,19 @@ function ServicesPage() {
     [],
     [],
   );
-  const [search, setSearch] = useState("");
+  const querySearch = useQueryParam("search");
+  const [search, setSearch] = useState<string | null>(null);
   const [category, setCategory] = useState("all");
   const [priceFilter, setPriceFilter] = useState(PRICE_FILTERS[0]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
+  const [isDeletingService, setIsDeletingService] = useState(false);
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
+
+  const searchValue = search ?? querySearch;
 
   const categories = useMemo(
     () => [...new Set(services.map((service) => service.category))].sort(),
@@ -74,7 +89,7 @@ function ServicesPage() {
   );
 
   const filteredServices = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = searchValue.trim().toLowerCase();
 
     return services.filter((service) => {
       const matchesSearch =
@@ -90,7 +105,7 @@ function ServicesPage() {
 
       return matchesSearch && matchesCategory && matchesPrice;
     });
-  }, [services, search, category, priceFilter]);
+  }, [services, searchValue, category, priceFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filteredServices.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -114,21 +129,22 @@ function ServicesPage() {
     setOpenActionsId(null);
   };
 
-  const handleDelete = async (service: Service) => {
-    const confirmed = window.confirm(
-      `Delete "${service.name}"? This cannot be undone.`,
-    );
-    if (!confirmed) return;
+  const handleDelete = async () => {
+    if (!serviceToDelete) return;
+
+    setIsDeletingService(true);
 
     try {
-      await deleteService(service.id);
+      await deleteService(serviceToDelete.id);
       toast.success("Service deleted", {
-        description: `${service.name} has been removed.`,
+        description: `${serviceToDelete.name} has been removed.`,
       });
+      setServiceToDelete(null);
     } catch (error) {
       console.error("Failed to delete service:", error);
       toast.error("Failed to delete service");
     } finally {
+      setIsDeletingService(false);
       setOpenActionsId(null);
     }
   };
@@ -149,7 +165,7 @@ function ServicesPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="search"
-              value={search}
+              value={searchValue}
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(1);
@@ -291,7 +307,10 @@ function ServicesPage() {
                             type="button"
                             role="menuitem"
                             className="w-full rounded-md px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
-                            onClick={() => void handleDelete(service)}
+                            onClick={() => {
+                              setServiceToDelete(service);
+                              setOpenActionsId(null);
+                            }}
                           >
                             Delete service
                           </button>
@@ -390,6 +409,45 @@ function ServicesPage() {
         onOpenChange={setServiceDialogOpen}
         service={editingService}
       />
+
+      <Dialog
+        open={serviceToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingService) setServiceToDelete(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete service?</DialogTitle>
+            <DialogDescription>
+              {serviceToDelete
+                ? `Delete ${serviceToDelete.name}? This action cannot be undone.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose
+              render={
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isDeletingService}
+                >
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isDeletingService}
+              onClick={() => void handleDelete()}
+            >
+              {isDeletingService ? "Deleting..." : "Delete service"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
