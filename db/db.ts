@@ -5,7 +5,7 @@ import type { Service } from "@/types/service";
 import type { ReceiptItem } from "@/types/receipt-item";
 import { User } from "@/types/user";
 
-export type PaymentMethod = "CASH" | "TRANSFER" | "POS";
+export type PaymentMethod = "CASH" | "TRANSFER" | "POS" | "OTHER";
 export type ReceiptStatus = "Completed" | "Pending" | "Cancelled";
 export type SyncStatus = "pending" | "synced" | "failed";
 

@@ -4,6 +4,8 @@ export interface ReceiptItem {
   id: string;
   receiptId: string;
   serviceId: string;
+  serviceName?: string;
+  serviceCategory?: string;
 
   quantity: number;
   unitPrice: number;
@@ -12,6 +14,6 @@ export interface ReceiptItem {
   createdAt: string;
   updatedAt: string;
 
-  ssyncStatus: SyncStatus;
+  syncStatus: SyncStatus;
   syncedAt?: string;
 }

@@ -62,7 +62,6 @@ export const sidebarItems: SidebarItem[] = [
     title: "Settings",
     href: "/settings",
     icon: Settings,
-    comingSoon: true,
   },
 ];
 

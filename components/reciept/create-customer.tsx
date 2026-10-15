@@ -30,9 +30,11 @@ import { useSearchField } from "@/hooks/custom/use-search-field";
 function CreateCustomer({
   customers,
   showTrigger = true,
+  onCustomerCreated,
 }: {
   customers: Customer[];
   showTrigger?: boolean;
+  onCustomerCreated: (customer: Customer) => void;
 }) {
   const { isDialogOpen, setIsDialogOpen } = useSearchField();
   const {
@@ -62,12 +64,13 @@ function CreateCustomer({
       });
 
       console.log("Customer created:", customer);
+      onCustomerCreated(customer);
       reset();
       setIsDialogOpen(false);
       toast.success("Customer created successfully", {
         description: `${name} has been added and selected.`,
       });
-      setSearchField(phone);
+      setSearchField(customer.phone);
     } catch (error) {
       toast.error("Failed to create customer");
       console.log("Failed to create customer:", error);

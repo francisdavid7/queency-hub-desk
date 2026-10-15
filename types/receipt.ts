@@ -7,6 +7,8 @@ export interface Receipt {
 
   date: string;
   total: number;
+  amountPaid?: number;
+  notes?: string;
 
   paymentMethod: PaymentMethod;
   status: ReceiptStatus;

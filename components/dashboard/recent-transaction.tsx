@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { PaymentMethod, ReceiptStatus } from "@/db/db";
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 
 export interface RecentTransactionType {
   receiptNo: string;
@@ -80,13 +81,8 @@ function RecentTransaction({
                 key={transaction.receiptNo}
                 className="hover:bg-muted/30"
               >
-                <TableCell>
-                  <Link
-                    href={`/receipts/${transaction.receiptNo}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {transaction.receiptNo}
-                  </Link>
+                <TableCell className="font-medium">
+                  {transaction.receiptNo}
                 </TableCell>
 
                 <TableCell>{transaction.customer}</TableCell>
@@ -104,12 +100,30 @@ function RecentTransaction({
                 </TableCell>
 
                 <TableCell>
-                  <Button variant="secondary" size="sm">
+                  <Badge
+                    className={
+                      transaction.status === "Completed"
+                        ? "bg-success-muted text-success"
+                        : transaction.status === "Pending"
+                          ? "bg-warning-muted text-warning"
+                          : "bg-muted text-muted-foreground"
+                    }
+                  >
                     {transaction.status}
-                  </Button>
+                  </Badge>
                 </TableCell>
               </TableRow>
             ))}
+            {recentTransactions.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className="h-32 text-center text-muted-foreground"
+                >
+                  No transactions yet. Create a receipt to see activity here.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </CardContent>

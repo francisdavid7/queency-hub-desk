@@ -14,13 +14,13 @@ const steps = [
   },
   {
     id: 3,
-    title: "Payment",
-    description: "Collect payment",
+    title: "Review",
+    description: "Check order",
   },
   {
     id: 4,
-    title: "Review",
-    description: "Check order",
+    title: "Payment",
+    description: "Collect payment",
   },
   {
     id: 5,
@@ -31,24 +31,33 @@ const steps = [
 ];
 
 function StepsProgress({ currentStep }: { currentStep: ReceiptStep }) {
-  return (
-    <div className="mt-4 flex items-center gap-4 p-4 border rounded-lg border-input bg-card">
-      {steps.map((step) => {
-        const isActive = step.title.toLowerCase() === currentStep;
+  const currentStepIndex = steps.findIndex(
+    (step) => step.title.toLowerCase() === currentStep,
+  );
 
-        const activeStep = steps.find(
-          (st) => st.title.toLowerCase() === currentStep,
-        );
+  return (
+    <div className="mt-4 overflow-x-auto rounded-lg border border-input bg-card p-4">
+      <div className="flex min-w-max items-center gap-4">
+      {steps.map((step) => {
+        const stepIndex = step.id - 1;
+        const isActive = stepIndex === currentStepIndex;
+        const isComplete = stepIndex < currentStepIndex;
 
         return (
           <div key={step.id} className="flex items-center gap-2">
             <span
-              className={`w-9 h-9 rounded-full flex items-center justify-center ${isActive ? "bg-primary text-primary-foreground font-bold" : "border-2 border-input"} ${activeStep && step.id < activeStep.id ? "bg-success text-success-foreground" : "border-0"}`}
+              className={`flex size-9 items-center justify-center rounded-full ${
+                isComplete
+                  ? "bg-success text-success-foreground"
+                  : isActive
+                    ? "bg-primary font-bold text-primary-foreground"
+                    : "border-2 border-input text-muted-foreground"
+              }`}
             >
-              {activeStep && step.id < activeStep.id ? (
+              {isComplete ? (
                 <Check size={15} />
               ) : (
-                <>{step.id}</>
+                step.id
               )}
             </span>
             <div>
@@ -63,6 +72,7 @@ function StepsProgress({ currentStep }: { currentStep: ReceiptStep }) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
