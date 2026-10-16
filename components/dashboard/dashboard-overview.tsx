@@ -36,7 +36,8 @@ function receiptRevenue(receipt: Receipt) {
 
 function changeLabel(current: number, previous: number) {
   if (current === 0 && previous === 0) return "No change this week";
-  if (previous === 0) return current > 0 ? "New this week" : "No change this week";
+  if (previous === 0)
+    return current > 0 ? "New this week" : "No change this week";
   const change = ((current - previous) / previous) * 100;
   const rounded = Math.round(Math.abs(change));
 
@@ -132,10 +133,7 @@ function DashboardOverview() {
       value: metrics.totalReceipts.toLocaleString("en-NG"),
       icon: ReceiptText,
       iconClass: "bg-info-muted text-info",
-      footer: changeLabel(
-        metrics.receiptsThisWeek,
-        metrics.receiptsLastWeek,
-      ),
+      footer: changeLabel(metrics.receiptsThisWeek, metrics.receiptsLastWeek),
       trend: metrics.receiptsThisWeek - metrics.receiptsLastWeek,
     },
     {
@@ -143,10 +141,7 @@ function DashboardOverview() {
       value: metrics.totalCustomers.toLocaleString("en-NG"),
       icon: Users,
       iconClass: "bg-success-muted text-success",
-      footer: changeLabel(
-        metrics.customersThisWeek,
-        metrics.customersLastWeek,
-      ),
+      footer: changeLabel(metrics.customersThisWeek, metrics.customersLastWeek),
       trend: metrics.customersThisWeek - metrics.customersLastWeek,
     },
     {
@@ -154,10 +149,7 @@ function DashboardOverview() {
       value: formatPrice(metrics.totalRevenue),
       icon: Banknote,
       iconClass: "bg-purple-muted text-purple",
-      footer: changeLabel(
-        metrics.revenueThisWeek,
-        metrics.revenueLastWeek,
-      ),
+      footer: changeLabel(metrics.revenueThisWeek, metrics.revenueLastWeek),
       trend: metrics.revenueThisWeek - metrics.revenueLastWeek,
     },
     {
@@ -167,10 +159,7 @@ function DashboardOverview() {
       iconClass: "bg-warning-muted text-warning",
       footer:
         metrics.servicesThisWeek || metrics.servicesLastWeek
-          ? changeLabel(
-              metrics.servicesThisWeek,
-              metrics.servicesLastWeek,
-            )
+          ? changeLabel(metrics.servicesThisWeek, metrics.servicesLastWeek)
           : "No change this week",
       trend: metrics.servicesThisWeek - metrics.servicesLastWeek,
     },
@@ -180,9 +169,11 @@ function DashboardOverview() {
     <section className="space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-primary">{greeting}</p>
+          <p className="text-sm font-semibold text-primary">
+            {greeting} Cashier!
+          </p>
           <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            Your business overview <span aria-hidden="true">👋</span>
+            Your business overview
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Quickly manage receipts, customers and services. Keep your business
@@ -211,7 +202,11 @@ function DashboardOverview() {
         {stats.map((stat) => {
           const Icon = stat.icon;
           const TrendIcon =
-            stat.trend > 0 ? ArrowUpRight : stat.trend < 0 ? ArrowDownRight : null;
+            stat.trend > 0
+              ? ArrowUpRight
+              : stat.trend < 0
+                ? ArrowDownRight
+                : null;
 
           return (
             <Card

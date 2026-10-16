@@ -196,7 +196,111 @@ function ReceiptsPage() {
           </Button>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
+        <div className="space-y-3 2xl:hidden">
+          {filteredReceipts.map((receipt) => {
+            const customer = receipt.customerId
+              ? customerById.get(receipt.customerId)
+              : undefined;
+            const statusClass =
+              receipt.status === "Completed"
+                ? "bg-success-muted text-success"
+                : receipt.status === "Pending"
+                  ? "bg-warning-muted text-warning"
+                  : "bg-muted text-muted-foreground";
+
+            return (
+              <div
+                key={receipt.id}
+                className="space-y-3 rounded-lg border border-border p-3"
+              >
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-primary">
+                      {receipt.receiptNumber}
+                    </p>
+                    <p className="mt-1 truncate text-sm">
+                      {customer?.name ?? "Walk-in Customer"}
+                    </p>
+                  </div>
+                  <Badge className={statusClass}>{receipt.status}</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="min-w-0">
+                    <p className="text-muted-foreground">Date</p>
+                    <p className="mt-0.5 truncate">
+                      {new Intl.DateTimeFormat("en-NG", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      }).format(new Date(receipt.date))}
+                    </p>
+                  </div>
+                  <div className="min-w-0 text-right">
+                    <p className="text-muted-foreground">Total</p>
+                    <p className="mt-0.5 truncate font-semibold tabular-nums">
+                      {formatPrice(receipt.total)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-muted-foreground">Payment</p>
+                    <p className="mt-0.5 truncate">
+                      {receipt.paymentMethod === "TRANSFER"
+                        ? "Bank transfer"
+                        : receipt.paymentMethod === "OTHER"
+                          ? "Other"
+                          : receipt.paymentMethod}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 border-t border-border pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setSelectedReceipt(receipt)}
+                  >
+                    <Eye className="size-4" />
+                    View receipt
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Delete receipt ${receipt.receiptNumber}`}
+                    onClick={() => setReceiptToDelete(receipt)}
+                  >
+                    <Trash2 className="size-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+          {filteredReceipts.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center">
+              <p className="font-semibold">
+                {receipts.length === 0
+                  ? "No receipts yet"
+                  : "No receipts match your filters"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {receipts.length === 0
+                  ? "Create a receipt to see your sales history here."
+                  : "Try a different search or status filter."}
+              </p>
+              {receipts.length === 0 && (
+                <Button
+                  type="button"
+                  className="mt-4"
+                  render={<Link href="/receipts/new" />}
+                >
+                  Create Receipt
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden overflow-hidden rounded-lg border border-border 2xl:block">
           <Table>
             <TableHeader className="bg-muted/60">
               <TableRow>

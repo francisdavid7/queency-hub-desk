@@ -415,7 +415,42 @@ function ReportsPage() {
           </p>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="space-y-3 lg:hidden">
+            {report.serviceRows.map((service, index) => (
+              <div
+                key={service.name}
+                className="rounded-lg border border-border p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-xs font-semibold text-accent-foreground">
+                      {index + 1}
+                    </span>
+                    <span className="truncate text-sm font-medium">
+                      {service.name}
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums">
+                    {formatPrice(service.revenue)}
+                  </span>
+                </div>
+                <div className="mt-2 flex justify-between gap-2 text-xs text-muted-foreground">
+                  <span>{service.quantity} sold</span>
+                  <span>
+                    {report.revenue
+                      ? `${Math.round((service.revenue / report.revenue) * 100)}% of revenue`
+                      : "—"}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {!report.serviceRows.length && (
+              <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                No service data for this period.
+              </p>
+            )}
+          </div>
+          <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[32rem] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">

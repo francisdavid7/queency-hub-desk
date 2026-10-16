@@ -151,7 +151,98 @@ function CustomersPage() {
           </Button>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
+        <div className="space-y-3 2xl:hidden">
+          {filteredCustomers.map((customer) => {
+            const receiptCount = receipts.filter(
+              (receipt) => receipt.customerId === customer.id,
+            ).length;
+            const initials = customer.name
+              .trim()
+              .split(/\s+/)
+              .map((part) => part[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase();
+
+            return (
+              <div
+                key={customer.id}
+                className="space-y-3 rounded-lg border border-border p-3"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar className="size-9 shrink-0">
+                    <AvatarFallback className="bg-accent text-xs font-semibold text-accent-foreground">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">
+                      {customer.name}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {customer.phone}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+                    {receiptCount} receipts
+                  </span>
+                </div>
+                {customer.email && (
+                  <p className="truncate text-xs text-muted-foreground">
+                    {customer.email}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => openEditDialog(customer)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Delete ${customer.name}`}
+                    onClick={() => setCustomerToDelete(customer)}
+                    disabled={receiptCount > 0}
+                  >
+                    <Trash2 className="size-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+          {filteredCustomers.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center">
+              <p className="font-semibold">
+                {customers.length === 0
+                  ? "No customers yet"
+                  : "No customers match your search"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {customers.length === 0
+                  ? "Add a customer to begin keeping customer history."
+                  : "Try another name, phone number, or email."}
+              </p>
+              {customers.length === 0 && (
+                <Button
+                  className="mt-4 gap-2"
+                  onClick={openAddDialog}
+                  type="button"
+                >
+                  <Plus className="size-4" />
+                  Add Customer
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden overflow-hidden rounded-lg border border-border 2xl:block">
           <Table>
             <TableHeader className="bg-muted/60">
               <TableRow>

@@ -9,6 +9,7 @@ import {
   Filter,
   Plus,
   Search,
+  Trash2,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -247,7 +248,68 @@ function ServicesPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border">
+        <div className="space-y-3 2xl:hidden">
+          {visibleServices.map((service) => (
+            <div
+              key={service.id}
+              className="flex min-w-0 items-center gap-3 rounded-lg border border-border p-3"
+            >
+              <ServiceIcon category={service.category} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{service.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {service.category} · {formatPrice(service.price)}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => openEditDialog(service)}
+              >
+                Edit
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Delete ${service.name}`}
+                onClick={() => setServiceToDelete(service)}
+              >
+                <Trash2 className="size-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
+          {visibleServices.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center">
+              <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                <Wrench className="size-5" />
+              </div>
+              <p className="font-semibold">
+                {services.length === 0
+                  ? "No services yet"
+                  : "No services match these filters"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {services.length === 0
+                  ? "Add your first service to start managing your pricing."
+                  : "Try another search or adjust the selected filters."}
+              </p>
+              {services.length === 0 && (
+                <Button
+                  type="button"
+                  className="mt-4 gap-2"
+                  onClick={openAddDialog}
+                >
+                  <Plus className="size-4" />
+                  Add Service
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden overflow-hidden rounded-lg border border-border 2xl:block">
           <Table>
             <TableHeader className="bg-muted/60">
               <TableRow>

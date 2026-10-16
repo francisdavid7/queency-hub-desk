@@ -234,7 +234,114 @@ function TransactionsPage() {
         <p className="mb-3 text-sm text-muted-foreground">
           Showing {filteredReceipts.length} of {receipts.length} transactions
         </p>
-        <div className="overflow-hidden rounded-lg border border-border">
+        <div className="space-y-3 2xl:hidden">
+          {filteredReceipts.map((receipt) => {
+            const customer = receipt.customerId
+              ? customerById.get(receipt.customerId)
+              : undefined;
+            const items = itemsByReceipt.get(receipt.id) ?? [];
+            const serviceNames = [
+              ...new Set(
+                items.map(
+                  (item) =>
+                    item.serviceName ??
+                    serviceById.get(item.serviceId)?.name ??
+                    "Service",
+                ),
+              ),
+            ];
+            const statusClass =
+              receipt.status === "Completed"
+                ? "bg-success-muted text-success"
+                : receipt.status === "Pending"
+                  ? "bg-warning-muted text-warning"
+                  : "bg-muted text-muted-foreground";
+
+            return (
+              <div
+                key={receipt.id}
+                className="space-y-3 rounded-lg border border-border p-3"
+              >
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-primary">
+                      {receipt.receiptNumber}
+                    </p>
+                    <p className="mt-1 truncate text-sm">
+                      {customer?.name ?? "Walk-in Customer"}
+                    </p>
+                  </div>
+                  <Badge className={statusClass}>{receipt.status}</Badge>
+                </div>
+                <p className="truncate text-xs text-muted-foreground">
+                  {serviceNames.join(", ") || "No service details"}
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="min-w-0">
+                    <p className="text-muted-foreground">Date</p>
+                    <p className="mt-0.5 truncate">
+                      {new Intl.DateTimeFormat("en-NG", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      }).format(new Date(receipt.date))}
+                    </p>
+                  </div>
+                  <div className="min-w-0 text-right">
+                    <p className="text-muted-foreground">Paid / total</p>
+                    <p className="mt-0.5 truncate font-semibold tabular-nums">
+                      {formatPrice(receipt.amountPaid ?? 0)}
+                    </p>
+                    <p className="truncate text-muted-foreground">
+                      of {formatPrice(receipt.total)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-muted-foreground">Payment method</p>
+                    <p className="mt-0.5 truncate">
+                      {paymentLabels[receipt.paymentMethod]}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setSelectedReceipt(receipt)}
+                >
+                  <Eye className="size-4" />
+                  View transaction
+                </Button>
+              </div>
+            );
+          })}
+          {filteredReceipts.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center">
+              <p className="font-semibold">
+                {receipts.length === 0
+                  ? "No transactions yet"
+                  : "No transactions match these filters"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {receipts.length === 0
+                  ? "Create a receipt to start tracking payment activity."
+                  : "Try another search or adjust the selected filters."}
+              </p>
+              {receipts.length === 0 && (
+                <Button
+                  type="button"
+                  className="mt-4"
+                  nativeButton={false}
+                  render={<Link href="/receipts/new" />}
+                >
+                  Create receipt
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden overflow-hidden rounded-lg border border-border 2xl:block">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader className="bg-muted/60">

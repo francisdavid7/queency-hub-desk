@@ -95,9 +95,7 @@ function AppSideBar() {
                 pathname === item.href ||
                 (item.href !== "/dashboard" &&
                   item.href !== "/receipts" &&
-                  pathname.startsWith(`${item.href}/`)) ||
-                (item.href === "/receipts" &&
-                  pathname.startsWith("/receipts/"));
+                  pathname.startsWith(`${item.href}/`));
 
               return (
                 <SidebarMenuItem key={item.href}>

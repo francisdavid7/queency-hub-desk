@@ -9,9 +9,9 @@ function Layout({ children }: { children: React.ReactNode }) {
     <SidebarProvider>
       <AppSideBar />
 
-      <main className="w-full">
+      <main className="min-w-0 w-full flex-1">
         <DashboardHeader />
-        <div className="px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
+        <div className="min-w-0 px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
           <GsapTransition
             animationKey="app-route"
             staggerItems

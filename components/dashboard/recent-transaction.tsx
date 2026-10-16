@@ -62,7 +62,55 @@ function RecentTransaction({
       </CardHeader>
 
       <CardContent className="px-3 pb-3 sm:px-4">
-        <div className="overflow-x-auto">
+        <div className="space-y-3 2xl:hidden">
+          {recentTransactions.map((transaction) => (
+            <Link
+              key={transaction.id}
+              href={`/transactions?search=${encodeURIComponent(transaction.receiptNo)}`}
+              className="block space-y-2 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40"
+            >
+              <div className="flex min-w-0 items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-primary">
+                    {transaction.receiptNo}
+                  </p>
+                  <p className="mt-0.5 truncate text-sm">
+                    {transaction.customer}
+                  </p>
+                </div>
+                <Badge
+                  className={
+                    transaction.status === "Completed"
+                      ? "bg-success-muted text-success"
+                      : transaction.status === "Pending"
+                        ? "bg-warning-muted text-warning"
+                        : "bg-muted text-muted-foreground"
+                  }
+                >
+                  {transaction.status}
+                </Badge>
+              </div>
+              <div className="flex min-w-0 items-end justify-between gap-2 text-xs">
+                <span className="min-w-0 truncate text-muted-foreground">
+                  {transaction.services}
+                </span>
+                <span className="shrink-0 font-semibold tabular-nums">
+                  {formatPrice(transaction.amount)}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {transaction.time}
+              </p>
+            </Link>
+          ))}
+          {recentTransactions.length === 0 && (
+            <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+              No transactions yet. Create a receipt to see activity here.
+            </p>
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto 2xl:block">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
