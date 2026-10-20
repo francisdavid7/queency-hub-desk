@@ -42,7 +42,7 @@ const formatPrice = (price: number) =>
 
 function CreateReceipt() {
   const [step, setStep] = useState<ReceiptStep>("customer");
-  const [cart, setCart] = useState<ReceiptCart>({});
+  const [cart, setCart] = useState<ReceiptCart>([]);
   const [isWalkIn, setIsWalkIn] = useState(false);
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
@@ -60,11 +60,11 @@ function CreateReceipt() {
   );
   const total = useMemo(
     () =>
-      services.reduce(
-        (sum, service) => sum + service.price * (cart[service.id] ?? 0),
+      cart.reduce(
+        (sum, item) => sum + item.unitPrice * item.quantity,
         0,
       ),
-    [cart, services],
+    [cart],
   );
 
   const handleWalkIn = () => {
@@ -79,14 +79,14 @@ function CreateReceipt() {
       return;
     }
 
-    const items = services
-      .filter((service) => cart[service.id] > 0)
-      .map((service) => ({
-        serviceId: service.id,
-        serviceName: service.name,
-        serviceCategory: service.category,
-        quantity: cart[service.id],
-        unitPrice: service.price,
+    const items = cart
+      .filter((item) => item.quantity > 0)
+      .map((item) => ({
+        serviceId: item.serviceId,
+        serviceName: item.serviceName,
+        serviceCategory: item.serviceCategory,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
       }));
 
     if (items.length === 0) {
@@ -133,7 +133,7 @@ function CreateReceipt() {
   };
 
   const startNewReceipt = () => {
-    setCart({});
+    setCart([]);
     setIsWalkIn(false);
     setNotes("");
     setPaymentMethod("CASH");
@@ -204,7 +204,6 @@ function CreateReceipt() {
         <ReceiptReviewStep
           customer={selectedCustomer ?? null}
           isWalkIn={isWalkIn}
-          services={services}
           cart={cart}
           notes={notes}
           onNotesChange={setNotes}

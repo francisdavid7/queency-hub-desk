@@ -7,13 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { Customer } from "@/types/customer";
-import type { Service } from "@/types/service";
 import type { ReceiptCart } from "./receipt-services-step";
 
 interface ReceiptReviewStepProps {
   customer: Customer | null;
   isWalkIn: boolean;
-  services: Service[];
   cart: ReceiptCart;
   notes: string;
   onNotesChange: (notes: string) => void;
@@ -31,16 +29,15 @@ const formatPrice = (price: number) =>
 function ReceiptReviewStep({
   customer,
   isWalkIn,
-  services,
   cart,
   notes,
   onNotesChange,
   onBack,
   onContinue,
 }: ReceiptReviewStepProps) {
-  const cartServices = services.filter((service) => cart[service.id]);
+  const cartServices = cart.filter((item) => item.quantity > 0);
   const total = cartServices.reduce(
-    (sum, service) => sum + service.price * cart[service.id],
+    (sum, item) => sum + item.unitPrice * item.quantity,
     0,
   );
 
@@ -86,22 +83,22 @@ function ReceiptReviewStep({
               <span>Qty</span>
               <span className="text-right">Amount</span>
             </div>
-            {cartServices.map((service) => (
+            {cartServices.map((item) => (
               <div
-                key={service.id}
+                key={item.key}
                 className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-t border-border px-4 py-3 text-sm"
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{service.name}</p>
+                  <p className="truncate font-medium">{item.serviceName}</p>
                   <p className="text-xs text-muted-foreground">
-                    {formatPrice(service.price)} each
+                    {item.serviceCategory} · {formatPrice(item.unitPrice)} each
                   </p>
                 </div>
                 <span className="text-muted-foreground">
-                  {cart[service.id]}
+                  {item.quantity}
                 </span>
                 <span className="text-right font-semibold tabular-nums">
-                  {formatPrice(service.price * cart[service.id])}
+                  {formatPrice(item.unitPrice * item.quantity)}
                 </span>
               </div>
             ))}

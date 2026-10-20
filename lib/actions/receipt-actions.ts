@@ -23,13 +23,19 @@ export async function createReceipt(input: CreateReceiptInput) {
   if (
     input.items.some(
       (item) =>
-        !Number.isInteger(item.quantity) ||
+        !item.serviceId.trim() ||
+        !item.serviceName.trim() ||
+        !item.serviceCategory.trim() ||
+        !Number.isSafeInteger(item.quantity) ||
         item.quantity <= 0 ||
         !Number.isFinite(item.unitPrice) ||
-        item.unitPrice < 0,
+        item.unitPrice < 0 ||
+        !Number.isFinite(item.quantity * item.unitPrice),
     )
   ) {
-    throw new Error("Receipt items must have valid quantities and prices.");
+    throw new Error(
+      "Receipt items must have a name, category, valid quantity, and price.",
+    );
   }
 
   const now = new Date().toISOString();
@@ -65,8 +71,8 @@ export async function createReceipt(input: CreateReceiptInput) {
     id: crypto.randomUUID(),
     receiptId: receipt.id,
     serviceId: item.serviceId,
-    serviceName: item.serviceName,
-    serviceCategory: item.serviceCategory,
+    serviceName: item.serviceName.trim(),
+    serviceCategory: item.serviceCategory.trim(),
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     amount: item.quantity * item.unitPrice,
