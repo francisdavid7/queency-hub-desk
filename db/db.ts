@@ -26,10 +26,11 @@ db.version(1).stores({
   receiptItems: "id, receiptId, serviceId, syncStatus, updatedAt",
 });
 
-db.open()
-  .then()
-  .catch((err) => {
-    console.log("Error occured establishing db", err);
+// IndexedDB only exists in the browser; skip opening during server prerender.
+if (typeof indexedDB !== "undefined") {
+  db.open().catch((err) => {
+    console.error("Error occurred establishing db", err);
   });
+}
 
 export { db };
