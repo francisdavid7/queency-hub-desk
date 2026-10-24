@@ -45,7 +45,11 @@ function ReceiptServicesStep({
   onBack,
 }: ReceiptServicesStepProps) {
   const services = useLiveQuery(
-    () => db.services.orderBy("name").toArray(),
+    () =>
+      db.services
+        .orderBy("name")
+        .filter((service) => !service.deletedAt)
+        .toArray(),
     [],
     [],
   );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { db } from "@/db/db";
+import { activeCustomers, activeServices, db } from "@/db/db";
 import {
   createCustomer,
   deleteCustomer,
@@ -45,10 +45,14 @@ describe("customer actions", () => {
     ).rejects.toThrow(/not found/);
   });
 
-  it("deletes a customer with no receipts", async () => {
+  it("soft-deletes a customer with no receipts", async () => {
     const customer = await createCustomer({ name: "Ada", phone: "08012345678" });
     await deleteCustomer(customer.id);
-    expect(await db.customers.count()).toBe(0);
+    expect(await activeCustomers().count()).toBe(0);
+    const stored = await db.customers.get(customer.id);
+    expect(stored?.deletedAt).toBeDefined();
+    expect(stored?.syncStatus).toBe("pending");
+    await expect(deleteCustomer(customer.id)).rejects.toThrow(/not found/);
   });
 
   it("blocks deleting a customer with receipt history", async () => {
@@ -89,7 +93,8 @@ describe("service actions", () => {
     expect(updated?.price).toBe(350);
 
     await deleteService(service.id);
-    expect(await db.services.count()).toBe(0);
+    expect(await activeServices().count()).toBe(0);
+    expect((await db.services.get(service.id))?.deletedAt).toBeDefined();
   });
 
   it("throws when updating or deleting a missing service", async () => {

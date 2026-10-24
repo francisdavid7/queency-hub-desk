@@ -1,7 +1,9 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
   ArrowLeft,
+  Ban,
   CheckCircle2,
   Printer,
   Plus,
@@ -26,14 +28,12 @@ interface ReceiptGeneratedProps {
   onBack: () => void;
   onNewReceipt: () => void;
   backLabel?: string;
+  cashierName?: string;
+  /** Extra actions (record payment, void) shown under the print button. */
+  actions?: ReactNode;
 }
 
-const formatPrice = (price: number) =>
-  new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 2,
-  }).format(price);
+import { formatPrice } from "@/lib/money";
 
 function getReceiptFilename(customerName: string | undefined) {
   const safeCustomerName = (customerName || "Walk-in Customer")
@@ -54,7 +54,12 @@ function ReceiptGenerated({
   onBack,
   onNewReceipt,
   backLabel = "Back to payment",
+  cashierName,
+  actions,
 }: ReceiptGeneratedProps) {
+  const isVoided = receipt.status === "Cancelled";
+  const discount = receipt.discount ?? 0;
+  const subtotal = receipt.subtotal ?? receipt.total;
   const amountPaid = receipt.amountPaid ?? 0;
   const balance = Math.max(receipt.total - amountPaid, 0);
   const change = Math.max(amountPaid - receipt.total, 0);
@@ -164,6 +169,18 @@ function ReceiptGenerated({
             </div>
           </div>
 
+          {isVoided && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <p className="flex items-center gap-2 font-semibold">
+                <Ban className="size-4" />
+                VOID — this receipt was cancelled
+              </p>
+              {receipt.voidReason && (
+                <p className="mt-1">Reason: {receipt.voidReason}</p>
+              )}
+            </div>
+          )}
+
           <div className="rounded-lg bg-muted/40 p-3 text-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Customer
@@ -207,8 +224,14 @@ function ReceiptGenerated({
           <div className="space-y-2 border-t border-dashed border-border pt-4 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
-              <span className="tabular-nums">{formatPrice(receipt.total)}</span>
+              <span className="tabular-nums">{formatPrice(subtotal)}</span>
             </div>
+            {discount > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Discount</span>
+                <span className="tabular-nums">−{formatPrice(discount)}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Payment method</span>
               <span className="font-medium">
@@ -249,6 +272,11 @@ function ReceiptGenerated({
               {receipt.notes}
             </p>
           )}
+          {cashierName && (
+            <p className="text-center text-xs text-muted-foreground">
+              Served by {cashierName}
+            </p>
+          )}
           <p className="border-t border-dashed border-border pt-4 text-center text-sm text-muted-foreground">
             Thank you for your Patronage.
           </p>
@@ -262,9 +290,11 @@ function ReceiptGenerated({
             Receipt generated
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            {receipt.status === "Completed"
-              ? "Payment has been completed and saved."
-              : "Receipt saved with an outstanding balance."}
+            {isVoided
+              ? "This receipt has been voided."
+              : receipt.status === "Completed"
+                ? "Payment has been completed and saved."
+                : "Receipt saved with an outstanding balance."}
           </p>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -272,6 +302,7 @@ function ReceiptGenerated({
             <Printer className="size-4" />
             Print receipt
           </Button>
+          {actions}
           <Button
             type="button"
             variant="outline"

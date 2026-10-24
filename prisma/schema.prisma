@@ -12,75 +12,6 @@ enum Role {
   CASHIER
 }
 
-model User {
-  id        String   @id @default(uuid())
-  userName  String   @default("CASHIER")
-  password  String
-  role      Role     @default(CASHIER)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Customer {
-  id    String  @id
-  name  String
-  phone String
-  email String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  receipts Receipt[]
-}
-
-model Receipt {
-  id            String  @id
-  receiptNumber String
-  customerId    String?
-
-  date  DateTime
-  total Float
-
-  paymentMethod PAYMENTMETHOD
-  status        RECEIPTSTATUS
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  receiptItems ReceiptItem[]
-  customer     Customer?     @relation(fields: [customerId], references: [id])
-}
-
-model ReceiptItem {
-  id String @id
-
-  receiptId String
-  receipt   Receipt @relation(fields: [receiptId], references: [id])
-
-  serviceId String
-  service   Service @relation(fields: [serviceId], references: [id])
-
-  quantity  String
-  unitPrice Int
-  amount    Float
-
-  createAt  DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Service {
-  id       String @id
-  name     String
-  category String
-  price    Int
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  items ReceiptItem[]
-}
-
 enum RECEIPTSTATUS {
   COMPLETED
   PENDING
@@ -91,4 +22,186 @@ enum PAYMENTMETHOD {
   CASH
   TRANSFER
   POS
+  OTHER
+}
+
+model User {
+  id           String    @id @default(uuid())
+  userName     String    @unique
+  name         String
+  passwordHash String
+  role         Role      @default(CASHIER)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions       Session[]
+  devices        Device[]
+  receipts       Receipt[]  @relation("ReceiptCashier")
+  voidedReceipts Receipt[]  @relation("ReceiptVoidedBy")
+  payments       Payment[]
+  auditLogs      AuditLog[]
+}
+
+/// Admin web sessions. `id` is the SHA-256 of the cookie token.
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// A cashier till (installed PWA). Authenticates sync with a bearer token.
+model Device {
+  id             String    @id
+  name           String
+  code           String
+  tokenHash      String    @unique
+  registeredById String
+  registeredBy   User      @relation(fields: [registeredById], references: [id])
+  lastSeenAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  receipts Receipt[]
+}
+
+model Customer {
+  id        String    @id
+  name      String
+  phone     String
+  email     String?
+  deletedAt DateTime?
+
+  /// Client-side timestamps (used for last-write-wins).
+  createdAt       DateTime
+  updatedAt       DateTime
+  /// Server write time (used as the pull cursor).
+  serverUpdatedAt DateTime @default(now()) @updatedAt
+
+  receipts Receipt[]
+
+  @@index([phone])
+  @@index([serverUpdatedAt])
+}
+
+model Service {
+  id        String    @id
+  name      String
+  category  String
+  price     Decimal   @db.Decimal(12, 2)
+  deletedAt DateTime?
+
+  createdAt       DateTime
+  updatedAt       DateTime
+  serverUpdatedAt DateTime @default(now()) @updatedAt
+
+  @@index([serverUpdatedAt])
+}
+
+model Receipt {
+  id            String    @id
+  receiptNumber String    @unique
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  cashierId     String?
+  cashier       User?     @relation("ReceiptCashier", fields: [cashierId], references: [id])
+  deviceId      String?
+  device        Device?   @relation(fields: [deviceId], references: [id])
+
+  date          DateTime
+  subtotal      Decimal       @db.Decimal(12, 2)
+  discount      Decimal       @default(0) @db.Decimal(12, 2)
+  total         Decimal       @db.Decimal(12, 2)
+  amountPaid    Decimal       @default(0) @db.Decimal(12, 2)
+  paymentMethod PAYMENTMETHOD
+  status        RECEIPTSTATUS
+  notes         String?
+
+  voidedAt   DateTime?
+  voidedById String?
+  voidedBy   User?     @relation("ReceiptVoidedBy", fields: [voidedById], references: [id])
+  voidReason String?
+
+  createdAt       DateTime
+  updatedAt       DateTime
+  serverUpdatedAt DateTime @default(now()) @updatedAt
+
+  items    ReceiptItem[]
+  payments Payment[]
+
+  @@index([date])
+  @@index([cashierId, date])
+  @@index([customerId])
+  @@index([status])
+  @@index([serverUpdatedAt])
+}
+
+/// Line items keep a snapshot of the service name/category/price so history
+/// survives service edits, archiving, and one-off manual items.
+model ReceiptItem {
+  id        String  @id
+  receiptId String
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  serviceId       String?
+  serviceName     String
+  serviceCategory String
+
+  quantity  Int
+  unitPrice Decimal @db.Decimal(12, 2)
+  amount    Decimal @db.Decimal(12, 2)
+
+  createdAt DateTime
+
+  @@index([receiptId])
+  @@index([serviceId])
+}
+
+model Payment {
+  id         String        @id
+  receiptId  String
+  receipt    Receipt       @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  amount     Decimal       @db.Decimal(12, 2)
+  method     PAYMENTMETHOD
+  cashierId  String?
+  cashier    User?         @relation(fields: [cashierId], references: [id])
+  receivedAt DateTime
+  createdAt  DateTime      @default(now())
+
+  @@index([receiptId])
+  @@index([receivedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  entityType String?
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+}
+
+/// Single-row table (id = 1) for receipt header details.
+model BusinessSettings {
+  id            Int      @id @default(1)
+  businessName  String   @default("Queency Hub")
+  address       String?
+  phone         String?
+  email         String?
+  receiptFooter String?  @default("Thank you for your patronage.")
+  updatedAt     DateTime @updatedAt
 }

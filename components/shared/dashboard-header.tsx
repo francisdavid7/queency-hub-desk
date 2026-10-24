@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Bell, Search, X } from "lucide-react";
+import { Bell, LogOut, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,12 +15,25 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { db } from "@/db/db";
+import { activeCustomers, activeServices, db } from "@/db/db";
+import SyncIndicator from "@/components/shared/sync-indicator";
+import { useCashierSession } from "@/hooks/custom/use-cashier-session";
+import { signOutOfTill } from "@/lib/auth/till-auth";
+
+const initials = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
 function DashboardHeader() {
-  const customers = useLiveQuery(() => db.customers.toArray(), [], []);
+  const session = useCashierSession();
+  const customers = useLiveQuery(() => activeCustomers().toArray(), [], []);
   const receipts = useLiveQuery(() => db.receipts.toArray(), [], []);
-  const services = useLiveQuery(() => db.services.toArray(), [], []);
+  const services = useLiveQuery(() => activeServices().toArray(), [], []);
   const [search, setSearch] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const query = search.trim().toLowerCase();
@@ -266,16 +279,30 @@ function DashboardHeader() {
           </DialogContent>
         </Dialog>
 
-        <div className="hidden items-center gap-2 border-l border-border pl-3 sm:flex">
-          <span className="flex size-9 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-            QH
+        <SyncIndicator />
+
+        <div className="flex items-center gap-2 border-l border-border pl-3">
+          <span className="hidden size-9 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground sm:flex">
+            {initials(session?.name ?? "")}
           </span>
           <span className="hidden lg:block">
             <span className="block text-sm font-semibold leading-tight">
-              Queency HubDesk
+              {session?.name}
             </span>
-            <span className="block text-xs text-muted-foreground">Workspace</span>
+            <span className="block text-xs capitalize text-muted-foreground">
+              {session?.role.toLowerCase()}
+            </span>
           </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Lock till"
+            title="Lock till (sign out)"
+            onClick={signOutOfTill}
+          >
+            <LogOut className="size-4" />
+          </Button>
         </div>
       </div>
     </header>

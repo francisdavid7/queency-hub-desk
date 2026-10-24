@@ -7,6 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { ArrowUpRight, Eye, ReceiptText, Search } from "lucide-react";
 
 import Header from "@/components/shared/header";
+import ReceiptActionsPanel from "@/components/reciept/receipt-actions-panel";
 import ReceiptGenerated from "@/components/reciept/receipt-generated";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,7 +55,14 @@ function TransactionsPage() {
   const [search, setSearch] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [paymentFilter, setPaymentFilter] = useState("all");
-  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
+  const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(
+    null,
+  );
+  // Read from the live query so payments and voids show immediately.
+  const selectedReceipt =
+    receipts.find((receipt) => receipt.id === selectedReceiptId) ?? null;
+  const setSelectedReceipt = (receipt: Receipt | null) =>
+    setSelectedReceiptId(receipt?.id ?? null);
   const searchValue = search ?? querySearch;
   const statusValue = statusFilter ?? queryStatus;
 
@@ -477,6 +485,7 @@ function TransactionsPage() {
               )}
               onBack={() => setSelectedReceipt(null)}
               backLabel="Back to transactions"
+              actions={<ReceiptActionsPanel receipt={selectedReceipt} />}
               onNewReceipt={() => {
                 setSelectedReceipt(null);
                 router.push("/receipts/new");

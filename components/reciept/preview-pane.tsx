@@ -3,10 +3,10 @@ import { Card } from "../ui/card";
 import CustomerBenefitCard from "./customer-benefit-card";
 import CustomerInformation from "./customer-information";
 import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/db/db";
+import { activeCustomers } from "@/db/db";
 
 function PreviewPane({ onContinue }: { onContinue: () => void }) {
-  const customers = useLiveQuery(() => db.customers.toArray(), [], []);
+  const customers = useLiveQuery(() => activeCustomers().toArray(), [], []);
   const { selectedCustomerId } = useSearchField();
 
   const selectedCustomer =

@@ -1,11 +1,18 @@
-import { db, type PaymentMethod } from "@/db/db";
+import { db, type PaymentMethod, type ReceiptStatus } from "@/db/db";
+import { requireCashierSession } from "@/lib/auth/cashier-session";
+import { getMeta } from "@/lib/meta";
+import { isValidAmount, roundMoney } from "@/lib/money";
+import type { Payment } from "@/types/payment";
 import type { Receipt } from "@/types/receipt";
 import type { ReceiptItem } from "@/types/receipt-item";
+
+export const RECEIPT_PREFIX = "QFLC";
 
 interface CreateReceiptInput {
   customerId?: string;
   paymentMethod: PaymentMethod;
   amountPaid: number;
+  discount?: number;
   notes?: string;
   items: Array<{
     serviceId: string;
@@ -16,7 +23,21 @@ interface CreateReceiptInput {
   }>;
 }
 
+export function receiptStatusFor(total: number, amountPaid: number): ReceiptStatus {
+  return roundMoney(amountPaid) >= roundMoney(total) ? "Completed" : "Pending";
+}
+
+/** Next sequential number for this till, e.g. QFLC-T1-000042. */
+async function nextReceiptNumber(deviceCode: string) {
+  const entry = await db.meta.get("receiptCounter");
+  const next = ((entry?.value as number | undefined) ?? 0) + 1;
+  await db.meta.put({ key: "receiptCounter", value: next });
+  return `${RECEIPT_PREFIX}-${deviceCode}-${String(next).padStart(6, "0")}`;
+}
+
 export async function createReceipt(input: CreateReceiptInput) {
+  const session = requireCashierSession();
+
   if (input.items.length === 0) {
     throw new Error("A receipt must contain at least one service.");
   }
@@ -28,8 +49,7 @@ export async function createReceipt(input: CreateReceiptInput) {
         !item.serviceCategory.trim() ||
         !Number.isSafeInteger(item.quantity) ||
         item.quantity <= 0 ||
-        !Number.isFinite(item.unitPrice) ||
-        item.unitPrice < 0 ||
+        !isValidAmount(item.unitPrice) ||
         !Number.isFinite(item.quantity * item.unitPrice),
     )
   ) {
@@ -38,30 +58,44 @@ export async function createReceipt(input: CreateReceiptInput) {
     );
   }
 
-  const now = new Date().toISOString();
-  const total = input.items.reduce(
-    (sum, item) => sum + item.quantity * item.unitPrice,
-    0,
+  const subtotal = roundMoney(
+    input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
   );
+  const discount = roundMoney(input.discount ?? 0);
 
-  if (!Number.isFinite(total) || total < 0) {
+  if (!Number.isFinite(subtotal) || subtotal < 0) {
     throw new Error("The receipt total must be a valid non-negative amount.");
   }
-
-  if (!Number.isFinite(input.amountPaid) || input.amountPaid < 0) {
+  if (!isValidAmount(discount) || discount > subtotal) {
+    throw new Error("The discount must be between zero and the subtotal.");
+  }
+  if (!isValidAmount(input.amountPaid)) {
     throw new Error("The amount paid must be a valid non-negative amount.");
   }
 
+  const device = await getMeta("device");
+  if (!device) {
+    throw new Error("This till is not registered. Sign in while online first.");
+  }
+
+  const now = new Date().toISOString();
+  const total = roundMoney(subtotal - discount);
+  const amountPaid = roundMoney(input.amountPaid);
+
   const receipt: Receipt = {
     id: crypto.randomUUID(),
-    receiptNumber: `QFLC-${Date.now()}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`,
+    receiptNumber: "",
     customerId: input.customerId,
+    cashierId: session.userId,
+    deviceId: device.id,
     date: now,
+    subtotal,
+    discount,
     total,
-    amountPaid: input.amountPaid,
+    amountPaid,
     notes: input.notes?.trim() || undefined,
     paymentMethod: input.paymentMethod,
-    status: input.amountPaid >= total ? "Completed" : "Pending",
+    status: receiptStatusFor(total, amountPaid),
     createdAt: now,
     updatedAt: now,
     syncStatus: "pending",
@@ -74,72 +108,188 @@ export async function createReceipt(input: CreateReceiptInput) {
     serviceName: item.serviceName.trim(),
     serviceCategory: item.serviceCategory.trim(),
     quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    amount: item.quantity * item.unitPrice,
+    unitPrice: roundMoney(item.unitPrice),
+    amount: roundMoney(item.quantity * item.unitPrice),
     createdAt: now,
     updatedAt: now,
     syncStatus: "pending",
   }));
 
+  const payments: Payment[] =
+    amountPaid > 0
+      ? [
+          {
+            id: crypto.randomUUID(),
+            receiptId: receipt.id,
+            amount: amountPaid,
+            method: input.paymentMethod,
+            cashierId: session.userId,
+            receivedAt: now,
+            createdAt: now,
+            updatedAt: now,
+            syncStatus: "pending",
+          },
+        ]
+      : [];
+
   await db.transaction(
     "rw",
-    db.customers,
-    db.receipts,
-    db.receiptItems,
+    [db.customers, db.receipts, db.receiptItems, db.payments, db.meta],
     async () => {
-      if (input.customerId && !(await db.customers.get(input.customerId))) {
-        throw new Error("The selected customer could not be found.");
+      if (input.customerId) {
+        const customer = await db.customers.get(input.customerId);
+        if (!customer || customer.deletedAt) {
+          throw new Error("The selected customer could not be found.");
+        }
       }
 
+      receipt.receiptNumber = await nextReceiptNumber(device.code);
       await db.receipts.add(receipt);
       await db.receiptItems.bulkAdd(receiptItems);
+      await db.payments.bulkAdd(payments);
     },
   );
 
-  return { receipt, receiptItems };
+  return { receipt, receiptItems, payments };
 }
 
+/**
+ * Correct the payment entered while creating a receipt (the wizard's
+ * "Back to payment" step). Only allowed before the receipt has synced and
+ * while it has at most one payment; afterwards use recordPayment.
+ */
 export async function updateReceiptPayment(
   receiptId: string,
   paymentMethod: PaymentMethod,
   amountPaid: number,
   notes?: string,
 ) {
-  if (!Number.isFinite(amountPaid) || amountPaid < 0) {
+  const session = requireCashierSession();
+  if (!isValidAmount(amountPaid)) {
     throw new Error("The amount paid must be a valid non-negative amount.");
   }
+  const amount = roundMoney(amountPaid);
 
-  const receipt = await db.receipts.get(receiptId);
-  if (!receipt) {
-    throw new Error(`Receipt ${receiptId} was not found.`);
-  }
+  await db.transaction("rw", db.receipts, db.payments, async () => {
+    const receipt = await db.receipts.get(receiptId);
+    if (!receipt) {
+      throw new Error(`Receipt ${receiptId} was not found.`);
+    }
+    const existing = await db.payments
+      .where("receiptId")
+      .equals(receiptId)
+      .toArray();
+    if (receipt.syncedAt || receipt.voidedAt || existing.length > 1) {
+      throw new Error(
+        "This receipt can no longer be edited. Record an additional payment instead.",
+      );
+    }
 
-  await db.receipts.update(receiptId, {
-    paymentMethod,
-    amountPaid,
-    notes: notes?.trim() || undefined,
-    status: amountPaid >= receipt.total ? "Completed" : "Pending",
-    updatedAt: new Date().toISOString(),
-    syncStatus: "pending",
-    syncedAt: undefined,
+    const now = new Date().toISOString();
+    await db.payments.where("receiptId").equals(receiptId).delete();
+    if (amount > 0) {
+      await db.payments.add({
+        id: existing[0]?.id ?? crypto.randomUUID(),
+        receiptId,
+        amount,
+        method: paymentMethod,
+        cashierId: session.userId,
+        receivedAt: now,
+        createdAt: existing[0]?.createdAt ?? now,
+        updatedAt: now,
+        syncStatus: "pending",
+      });
+    }
+
+    await db.receipts.update(receiptId, {
+      paymentMethod,
+      amountPaid: amount,
+      notes: notes?.trim() || undefined,
+      status: receiptStatusFor(receipt.total, amount),
+      updatedAt: now,
+      syncStatus: "pending",
+    });
   });
 
   const updatedReceipt = await db.receipts.get(receiptId);
   if (!updatedReceipt) {
     throw new Error(`Receipt ${receiptId} could not be loaded after update.`);
   }
-
   return updatedReceipt;
 }
 
-export async function deleteReceipt(receiptId: string) {
-  await db.transaction("rw", db.receipts, db.receiptItems, async () => {
+/** Record an additional payment against an outstanding balance. */
+export async function recordPayment(
+  receiptId: string,
+  method: PaymentMethod,
+  amount: number,
+) {
+  const session = requireCashierSession();
+  if (!isValidAmount(amount) || amount <= 0) {
+    throw new Error("Enter a payment amount greater than zero.");
+  }
+  const paymentAmount = roundMoney(amount);
+  const now = new Date().toISOString();
+
+  await db.transaction("rw", db.receipts, db.payments, async () => {
     const receipt = await db.receipts.get(receiptId);
-    if (!receipt) {
-      throw new Error(`Receipt ${receiptId} was not found.`);
+    if (!receipt) throw new Error(`Receipt ${receiptId} was not found.`);
+    if (receipt.voidedAt) throw new Error("This receipt has been voided.");
+
+    const paid = receipt.amountPaid ?? 0;
+    if (paid >= receipt.total) {
+      throw new Error("This receipt is already fully paid.");
     }
 
-    await db.receiptItems.where("receiptId").equals(receiptId).delete();
-    await db.receipts.delete(receiptId);
+    const amountPaid = roundMoney(paid + paymentAmount);
+    await db.payments.add({
+      id: crypto.randomUUID(),
+      receiptId,
+      amount: paymentAmount,
+      method,
+      cashierId: session.userId,
+      receivedAt: now,
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: "pending",
+    });
+    await db.receipts.update(receiptId, {
+      amountPaid,
+      status: receiptStatusFor(receipt.total, amountPaid),
+      updatedAt: now,
+      syncStatus: "pending",
+    });
   });
+
+  return db.receipts.get(receiptId);
+}
+
+/**
+ * Void a receipt. Receipts are never deleted so every issued number stays
+ * accounted for; only admins may void, and a reason is required.
+ */
+export async function voidReceipt(receiptId: string, reason: string) {
+  const session = requireCashierSession();
+  if (session.role !== "ADMIN") {
+    throw new Error("Only an administrator can void a receipt.");
+  }
+  const trimmedReason = reason.trim();
+  if (trimmedReason.length < 3) {
+    throw new Error("Enter a reason for voiding this receipt.");
+  }
+
+  const receipt = await db.receipts.get(receiptId);
+  if (!receipt) throw new Error(`Receipt ${receiptId} was not found.`);
+  if (receipt.voidedAt) throw new Error("This receipt is already voided.");
+
+  const now = new Date().toISOString();
+  await db.receipts.update(receiptId, {
+    status: "Cancelled",
+    voidedAt: now,
+    voidedById: session.userId,
+    voidReason: trimmedReason,
+    updatedAt: now,
+    syncStatus: "pending",
+  });
+  return db.receipts.get(receiptId);
 }
