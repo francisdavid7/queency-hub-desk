@@ -75,7 +75,7 @@ async function existingUserIds(ids: Array<string | null | undefined>) {
 }
 
 /** Recalculate paid amount and status from the payment ledger. */
-async function refreshReceiptBalance(tx: Prisma.TransactionClient, receiptId: string) {
+export async function refreshReceiptBalance(tx: Prisma.TransactionClient, receiptId: string) {
   const receipt = await tx.receipt.findUnique({
     where: { id: receiptId },
     include: { payments: { orderBy: { receivedAt: "asc" } } },

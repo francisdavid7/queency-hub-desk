@@ -32,6 +32,7 @@ export default defineConfig({
           fileParallelism: false,
           // Password hashing and real database round-trips are slow by design.
           testTimeout: 30_000,
+          hookTimeout: 60_000,
           env: { DATABASE_URL: process.env.TEST_DATABASE_URL ?? "" },
         },
       },
