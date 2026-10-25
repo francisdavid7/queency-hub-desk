@@ -298,3 +298,97 @@
     -webkit-print-color-adjust: exact;
   }
 }
+
+/* Thermal (58mm / 80mm) receipt layout — only ever visible in print. */
+.thermal-receipt {
+  display: none;
+  font-family: ui-monospace, Consolas, "Courier New", monospace;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: #000;
+}
+.thermal-receipt p {
+  margin: 0;
+}
+.thermal-logo {
+  display: block;
+  width: 62%;
+  margin: 0 auto 1.5mm;
+  filter: grayscale(1) contrast(1.4);
+}
+.thermal-center {
+  text-align: center;
+}
+.thermal-bold {
+  font-weight: 700;
+}
+.thermal-large {
+  font-size: 1.15em;
+}
+.thermal-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 2mm;
+}
+.thermal-row > span:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+.thermal-item-name {
+  word-break: break-word;
+}
+.thermal-item {
+  margin-bottom: 1mm;
+}
+.thermal-rule {
+  border-top: 1px dashed #000;
+  margin: 1.5mm 0;
+}
+
+@media print {
+  #receipt-print-portal[data-paper="80mm"],
+  #receipt-print-portal[data-paper="58mm"] {
+    padding: 2mm 3mm 6mm !important;
+  }
+  #receipt-print-portal .thermal-receipt {
+    display: block !important;
+  }
+  #receipt-print-portal[data-paper="80mm"] .thermal-receipt {
+    width: 72mm;
+  }
+  #receipt-print-portal[data-paper="58mm"] .thermal-receipt {
+    width: 50mm;
+    font-size: 10px;
+  }
+}
+
+/* Installed app: behave like a desktop window, not a web page. */
+@media (display-mode: standalone), (display-mode: window-controls-overlay) {
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+  nav,
+  button,
+  [role="tab"],
+  label {
+    user-select: none;
+  }
+}
+
+/* Window Controls Overlay: our header becomes the draggable title bar, padded
+   so it never sits under the Windows minimise/maximise/close buttons. */
+@media (display-mode: window-controls-overlay) {
+  .app-titlebar {
+    -webkit-app-region: drag;
+    app-region: drag;
+    min-height: max(4rem, env(titlebar-area-height, 0px));
+    padding-right: calc(
+      100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 1rem
+    ) !important;
+  }
+  .app-titlebar :is(button, a, input, select, kbd, [role="listbox"]) {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+}

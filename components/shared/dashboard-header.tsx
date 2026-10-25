@@ -111,7 +111,7 @@ function DashboardHeader() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-16 items-center gap-3 border-b border-border bg-card/95 px-4 backdrop-blur sm:px-6 lg:px-8">
+    <header className="app-titlebar sticky top-0 z-30 flex min-h-16 items-center gap-3 border-b border-border bg-card/95 px-4 backdrop-blur sm:px-6 lg:px-8">
       <Button
         type="button"
         variant="outline"

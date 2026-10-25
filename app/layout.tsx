@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -17,7 +17,16 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "HubDesk",
+  applicationName: "Queency HubDesk",
   description: "Receipt and transaction management for Queency Hub.",
+  appleWebApp: { capable: true, title: "HubDesk", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1220" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

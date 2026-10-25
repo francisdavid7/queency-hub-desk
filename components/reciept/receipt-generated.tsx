@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import {
   ArrowLeft,
   Ban,
@@ -12,6 +13,9 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import ThermalReceipt from "@/components/reciept/thermal-receipt";
+import { db } from "@/db/db";
+import { getMeta } from "@/lib/meta";
 import type { Customer } from "@/types/customer";
 import type { Receipt } from "@/types/receipt";
 import type { ReceiptItem } from "@/types/receipt-item";
@@ -57,6 +61,23 @@ function ReceiptGenerated({
   cashierName,
   actions,
 }: ReceiptGeneratedProps) {
+  const thermalRef = useRef<HTMLDivElement>(null);
+  const tillSettings = useLiveQuery(
+    async () => ({
+      paperWidth: (await getMeta("paperWidth")) ?? "80mm",
+      business: await getMeta("businessSettings"),
+      staff: (await getMeta("staff")) ?? [],
+    }),
+    [],
+  );
+  const payments = useLiveQuery(
+    () => db.payments.where("receiptId").equals(receipt.id).sortBy("receivedAt"),
+    [receipt.id],
+    [],
+  );
+  const servedBy =
+    cashierName ??
+    tillSettings?.staff.find((member) => member.id === receipt.cashierId)?.name;
   const isVoided = receipt.status === "Cancelled";
   const discount = receipt.discount ?? 0;
   const subtotal = receipt.subtotal ?? receipt.total;
@@ -65,7 +86,11 @@ function ReceiptGenerated({
   const change = Math.max(amountPaid - receipt.total, 0);
 
   const handlePrint = () => {
-    const receiptElement = document.getElementById("receipt-print");
+    const paperWidth = tillSettings?.paperWidth ?? "80mm";
+    const isThermal = paperWidth !== "A4";
+    const receiptElement = isThermal
+      ? thermalRef.current?.querySelector<HTMLElement>("[data-thermal-source]")
+      : document.getElementById("receipt-print");
     if (!receiptElement) {
       console.error(
         "Unable to print receipt: printable content was not found.",
@@ -76,10 +101,18 @@ function ReceiptGenerated({
     const printPortal = document.createElement("div");
     printPortal.id = "receipt-print-portal";
     printPortal.setAttribute("aria-hidden", "true");
+    printPortal.dataset.paper = paperWidth;
     const printableReceipt = receiptElement.cloneNode(true) as HTMLElement;
     printableReceipt.removeAttribute("data-receipt-source");
     printPortal.appendChild(printableReceipt);
     document.body.appendChild(printPortal);
+
+    // Roll paper: page as wide as the roll and as long as the receipt.
+    const pageStyle = document.createElement("style");
+    pageStyle.textContent = isThermal
+      ? `@page { size: ${paperWidth} auto; margin: 0; }`
+      : "@page { size: A4 portrait; margin: 0; }";
+    document.head.appendChild(pageStyle);
 
     const originalTitle = document.title;
     document.title = getReceiptFilename(
@@ -89,6 +122,7 @@ function ReceiptGenerated({
     const cleanup = () => {
       window.removeEventListener("afterprint", cleanup);
       printPortal.remove();
+      pageStyle.remove();
       document.title = originalTitle;
     };
 
@@ -272,13 +306,13 @@ function ReceiptGenerated({
               {receipt.notes}
             </p>
           )}
-          {cashierName && (
+          {servedBy && (
             <p className="text-center text-xs text-muted-foreground">
-              Served by {cashierName}
+              Served by {servedBy}
             </p>
           )}
           <p className="border-t border-dashed border-border pt-4 text-center text-sm text-muted-foreground">
-            Thank you for your Patronage.
+            {tillSettings?.business?.receiptFooter ?? "Thank you for your patronage."}
           </p>
         </CardContent>
       </Card>
@@ -302,6 +336,9 @@ function ReceiptGenerated({
             <Printer className="size-4" />
             Print receipt
           </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Paper: {tillSettings?.paperWidth ?? "80mm"} · change in Settings
+          </p>
           {actions}
           <Button
             type="button"
@@ -323,6 +360,17 @@ function ReceiptGenerated({
           </Button>
         </CardContent>
       </Card>
+      <div ref={thermalRef} hidden>
+        <ThermalReceipt
+          receipt={receipt}
+          items={receiptItems}
+          payments={payments}
+          customerName={isWalkIn ? "Walk-in Customer" : (customer?.name ?? "Customer")}
+          customerPhone={isWalkIn ? undefined : customer?.phone}
+          cashierName={servedBy}
+          settings={tillSettings?.business}
+        />
+      </div>
     </div>
   );
 }
