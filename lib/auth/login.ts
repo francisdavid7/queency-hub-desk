@@ -5,6 +5,7 @@ import { burnPasswordCheck, verifyPassword } from "@/lib/auth/password";
 import prisma from "@/lib/prisma/prisma";
 
 const MAX_FAILURES = 5;
+const MAX_FAILURES_PER_IP = 25;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 
 export type LoginResult =
@@ -36,7 +37,17 @@ export async function checkCredentials(
       details: { path: ["userName"], equals: userName },
     },
   });
-  if (recentFailures >= MAX_FAILURES) {
+  // A looser per-address limit slows guessing across many usernames.
+  const ipFailures = ipAddress
+    ? await prisma.auditLog.count({
+        where: {
+          action: "auth.login_failed",
+          ipAddress,
+          createdAt: { gte: new Date(Date.now() - LOCKOUT_WINDOW_MS) },
+        },
+      })
+    : 0;
+  if (recentFailures >= MAX_FAILURES || ipFailures >= MAX_FAILURES_PER_IP) {
     return {
       ok: false,
       error: "Too many failed attempts. Try again in 15 minutes.",

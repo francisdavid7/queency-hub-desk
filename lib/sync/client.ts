@@ -1,7 +1,7 @@
 import type { Table } from "dexie";
 
 import { db } from "@/db/db";
-import { setCashierSession } from "@/lib/auth/cashier-session";
+import { getCashierSession, setCashierSession } from "@/lib/auth/cashier-session";
 import { deleteMeta, getMeta, setMeta } from "@/lib/meta";
 import type {
   PullCursors,
@@ -226,7 +226,7 @@ async function applyPull(page: PullResponse) {
   const now = new Date().toISOString();
   await db.transaction(
     "rw",
-    [db.customers, db.services, db.receipts, db.receiptItems, db.payments, db.meta],
+    [db.customers, db.services, db.receipts, db.receiptItems, db.payments, db.meta, db.users],
     async () => {
       for (const remote of page.customers) {
         const local = await db.customers.get(remote.id);
@@ -307,6 +307,10 @@ async function applyPull(page: PullResponse) {
         );
       }
 
+      // Deactivated or removed staff lose their offline sign-in on this till.
+      const activeIds = new Set(page.staff.filter((member) => member.isActive).map((m) => m.id));
+      await db.users.filter((user) => !activeIds.has(user.id)).delete();
+
       await db.meta.bulkPut([
         { key: "pullCursors", value: page.cursors },
         { key: "staff", value: page.staff },
@@ -350,6 +354,9 @@ async function runSync() {
   try {
     await pushPending(device);
     await pullChanges(device);
+    // Sign out a cashier whose account was deactivated while they were in.
+    const session = getCashierSession();
+    if (session && !(await db.users.get(session.userId))) setCashierSession(null);
     const lastSyncAt = new Date().toISOString();
     await setMeta("lastSyncAt", lastSyncAt);
     setState({ phase: "idle", lastSyncAt });

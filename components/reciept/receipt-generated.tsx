@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   ArrowLeft,
@@ -129,6 +129,22 @@ function ReceiptGenerated({
     window.addEventListener("afterprint", cleanup, { once: true });
     window.requestAnimationFrame(() => window.print());
   };
+
+  // Ctrl+P prints the receipt layout instead of the whole page.
+  const printRef = useRef(handlePrint);
+  useEffect(() => {
+    printRef.current = handlePrint;
+  });
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        printRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">

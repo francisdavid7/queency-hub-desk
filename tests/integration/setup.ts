@@ -1,6 +1,7 @@
 import { afterAll, beforeEach } from "vitest";
 
 import { POST as tillLogin } from "@/app/api/auth/till-login/route";
+import { POST as voidReceiptRoute } from "@/app/api/receipts/void/route";
 import { GET as syncPull } from "@/app/api/sync/pull/route";
 import { POST as syncPush } from "@/app/api/sync/push/route";
 import { hashPassword } from "@/lib/auth/password";
@@ -26,6 +27,7 @@ const routes: Record<string, (request: Request) => Promise<Response>> = {
   "POST /api/auth/till-login": tillLogin,
   "POST /api/sync/push": syncPush,
   "GET /api/sync/pull": syncPull,
+  "POST /api/receipts/void": voidReceiptRoute,
 };
 
 export const fetchLog: string[] = [];

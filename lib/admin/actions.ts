@@ -11,7 +11,7 @@ import { hashPassword, MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
 import { createSession, destroySession, getSessionUser, requireAdmin } from "@/lib/auth/session";
 import { roundMoney } from "@/lib/money";
 import prisma from "@/lib/prisma/prisma";
-import { refreshReceiptBalance } from "@/lib/sync/server";
+import { voidReceiptOnServer } from "@/lib/sync/server";
 
 export interface ActionState {
   ok?: boolean;
@@ -50,31 +50,16 @@ export async function logoutAction() {
 
 export async function voidReceiptAction(_: ActionState, formData: FormData): Promise<ActionState> {
   const admin = await requireAdmin();
-  const receiptId = String(formData.get("receiptId") ?? "");
-  const reason = String(formData.get("reason") ?? "").trim();
-  if (reason.length < 3) return fail("Enter a reason for voiding this receipt.");
-
-  const receipt = await prisma.receipt.findUnique({ where: { id: receiptId } });
-  if (!receipt) return fail("Receipt not found.");
-  if (receipt.voidedAt) return fail("This receipt is already voided.");
-
-  const now = new Date();
-  await prisma.$transaction(async (tx) => {
-    await tx.receipt.update({
-      where: { id: receiptId },
-      data: { voidedAt: now, voidedById: admin.id, voidReason: reason, updatedAt: now },
-    });
-    await refreshReceiptBalance(tx, receiptId);
-  });
-  await audit("receipt.voided", {
-    actorId: admin.id,
-    entityType: "Receipt",
-    entityId: receiptId,
-    details: { receiptNumber: receipt.receiptNumber, reason, source: "web" },
-    ipAddress: await ipAddress(),
-  });
+  const result = await voidReceiptOnServer(
+    String(formData.get("receiptId") ?? ""),
+    admin.id,
+    String(formData.get("reason") ?? ""),
+    "web",
+    await ipAddress(),
+  );
+  if (!result.ok) return fail(result.error);
   revalidatePath("/admin", "layout");
-  return done(`Receipt ${receipt.receiptNumber} voided.`);
+  return done(`Receipt ${result.receipt.receiptNumber} voided.`);
 }
 
 const userSchema = z.object({

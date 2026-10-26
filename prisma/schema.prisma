@@ -61,7 +61,7 @@ model Session {
 model Device {
   id             String    @id
   name           String
-  code           String
+  code           String    @unique
   tokenHash      String    @unique
   registeredById String
   registeredBy   User      @relation(fields: [registeredById], references: [id])

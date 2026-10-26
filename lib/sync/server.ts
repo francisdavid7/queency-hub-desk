@@ -7,6 +7,7 @@ import {
   type RECEIPTSTATUS,
 } from "@/app/generated/prisma/client";
 import { audit } from "@/lib/audit";
+import { RECEIPT_PREFIX } from "@/lib/receipt-number";
 import { roundMoney } from "@/lib/money";
 import prisma from "@/lib/prisma/prisma";
 import { getBusinessSettings } from "@/lib/settings";
@@ -76,6 +77,7 @@ async function existingUserIds(ids: Array<string | null | undefined>) {
 
 /** Recalculate paid amount and status from the payment ledger. */
 export async function refreshReceiptBalance(tx: Prisma.TransactionClient, receiptId: string) {
+  await lockReceipt(tx, receiptId);
   const receipt = await tx.receipt.findUnique({
     where: { id: receiptId },
     include: { payments: { orderBy: { receivedAt: "asc" } } },
@@ -99,6 +101,23 @@ export async function refreshReceiptBalance(tx: Prisma.TransactionClient, receip
   });
 }
 
+/**
+ * Lock the receipt row for the rest of the transaction so concurrent payments
+ * or voids on the same receipt are applied one at a time (no lost updates).
+ */
+async function lockReceipt(tx: Prisma.TransactionClient, receiptId: string) {
+  await tx.$queryRaw`SELECT id FROM "Receipt" WHERE id = ${receiptId} FOR UPDATE`;
+}
+
+/** Client clocks may drift a little; anything further ahead is rejected. */
+const MAX_CLOCK_SKEW_MS = 10 * 60 * 1000;
+const isFromFuture = (...dates: Array<string | null | undefined>) =>
+  dates.some((date) => date && new Date(date).getTime() > Date.now() + MAX_CLOCK_SKEW_MS);
+const FUTURE_ERROR = "The till's clock is ahead of the server. Check the PC's date and time.";
+
+/** Receipts made before per-till numbering: QFLC-<epoch ms>-<6 chars>. */
+const LEGACY_RECEIPT_NUMBER = /^QFLC-\d{13}-[A-Z0-9]{6}$/;
+
 async function pushReceipt(
   receipt: SyncReceipt,
   device: Device,
@@ -106,105 +125,133 @@ async function pushReceipt(
 ): Promise<PushResult> {
   const existing = await prisma.receipt.findUnique({ where: { id: receipt.id } });
 
-  if (!existing) {
-    const totalsError = verifyReceiptTotals(receipt);
-    if (totalsError) {
-      await audit("receipt.rejected", {
-        entityType: "Receipt",
-        entityId: receipt.id,
-        details: { receiptNumber: receipt.receiptNumber, deviceId: device.id, error: totalsError },
-      });
-      return fail(receipt.id, totalsError);
-    }
-    const numberTaken = await prisma.receipt.findUnique({
-      where: { receiptNumber: receipt.receiptNumber },
-      select: { id: true },
-    });
-    if (numberTaken) {
-      return fail(receipt.id, `Receipt number ${receipt.receiptNumber} is already used.`);
-    }
-
-    const customerExists = receipt.customerId
-      ? Boolean(await prisma.customer.findUnique({ where: { id: receipt.customerId } }))
-      : false;
-    const voidAllowed = Boolean(
-      receipt.voidedAt && receipt.voidedById && roles.get(receipt.voidedById) === "ADMIN",
-    );
-
-    await prisma.$transaction(async (tx) => {
-      await tx.receipt.create({
-        data: {
-          id: receipt.id,
-          receiptNumber: receipt.receiptNumber,
-          customerId: customerExists ? receipt.customerId : null,
-          cashierId: receipt.cashierId && roles.has(receipt.cashierId) ? receipt.cashierId : null,
-          // Attribute to the authenticated till, not whatever the client claims.
-          deviceId: device.id,
-          date: new Date(receipt.date),
-          subtotal: receipt.subtotal,
-          discount: receipt.discount,
-          total: receipt.total,
-          paymentMethod: receipt.paymentMethod,
-          // Recomputed from payments and void state by refreshReceiptBalance.
-          status: voidAllowed ? "CANCELLED" : "PENDING",
-          notes: receipt.notes ?? null,
-          voidedAt: voidAllowed ? new Date(receipt.voidedAt!) : null,
-          voidedById: voidAllowed ? receipt.voidedById : null,
-          voidReason: voidAllowed ? receipt.voidReason : null,
-          createdAt: new Date(receipt.createdAt),
-          updatedAt: new Date(receipt.updatedAt),
-          items: {
-            create: receipt.items.map((item) => ({
-              id: item.id,
-              serviceId: item.serviceId?.startsWith("manual-") ? null : (item.serviceId ?? null),
-              serviceName: item.serviceName,
-              serviceCategory: item.serviceCategory,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              amount: roundMoney(item.quantity * item.unitPrice),
-              createdAt: new Date(item.createdAt),
-            })),
-          },
-        },
-      });
-      await refreshReceiptBalance(tx, receipt.id);
-    });
-    if (voidAllowed) {
-      await audit("receipt.voided", {
-        actorId: receipt.voidedById,
-        entityType: "Receipt",
-        entityId: receipt.id,
-        details: { receiptNumber: receipt.receiptNumber, reason: receipt.voidReason ?? null, source: "till" },
-      });
-    }
-    return ok(receipt.id);
+  // Voids are never accepted over sync: sync authenticates the till, not the
+  // person. They go through /api/receipts/void with the admin's password.
+  if ((receipt.voidedAt || receipt.voidedById) && !existing?.voidedAt) {
+    return fail(receipt.id, "Voids must be confirmed online by an administrator.");
+  }
+  if (isFromFuture(receipt.date, receipt.createdAt, receipt.updatedAt)) {
+    return fail(receipt.id, FUTURE_ERROR, true);
   }
 
-  // Existing receipt: items and amounts are immutable. Only a void can change.
-  if (receipt.voidedAt && !existing.voidedAt) {
-    if (!receipt.voidedById || roles.get(receipt.voidedById) !== "ADMIN") {
-      return fail(receipt.id, "Only an administrator can void a receipt.");
-    }
-    await prisma.$transaction(async (tx) => {
-      await tx.receipt.update({
-        where: { id: receipt.id },
-        data: {
-          voidedAt: new Date(receipt.voidedAt!),
-          voidedById: receipt.voidedById,
-          voidReason: receipt.voidReason ?? null,
-          updatedAt: new Date(receipt.updatedAt),
-        },
-      });
-      await refreshReceiptBalance(tx, receipt.id);
-    });
-    await audit("receipt.voided", {
-      actorId: receipt.voidedById,
+  if (existing) {
+    // Items, amounts and attribution are immutable once stored.
+    return existing.deviceId === device.id
+      ? ok(receipt.id)
+      : fail(receipt.id, "This receipt belongs to another till.");
+  }
+
+  const ownPrefix = `${RECEIPT_PREFIX}-${device.code}-`;
+  if (
+    !receipt.receiptNumber.startsWith(ownPrefix) &&
+    !LEGACY_RECEIPT_NUMBER.test(receipt.receiptNumber)
+  ) {
+    return fail(receipt.id, `Receipt numbers from this till must start with ${ownPrefix}.`);
+  }
+
+  const totalsError = verifyReceiptTotals(receipt);
+  if (totalsError) {
+    await audit("receipt.rejected", {
       entityType: "Receipt",
       entityId: receipt.id,
-      details: { receiptNumber: existing.receiptNumber, reason: receipt.voidReason ?? null, source: "till" },
+      details: { receiptNumber: receipt.receiptNumber, deviceId: device.id, error: totalsError },
     });
+    return fail(receipt.id, totalsError);
   }
+  const numberTaken = await prisma.receipt.findUnique({
+    where: { receiptNumber: receipt.receiptNumber },
+    select: { id: true },
+  });
+  if (numberTaken) {
+    return fail(receipt.id, `Receipt number ${receipt.receiptNumber} is already used.`);
+  }
+
+  const customerExists = receipt.customerId
+    ? Boolean(await prisma.customer.findUnique({ where: { id: receipt.customerId } }))
+    : false;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.receipt.create({
+      data: {
+        id: receipt.id,
+        receiptNumber: receipt.receiptNumber,
+        customerId: customerExists ? receipt.customerId : null,
+        cashierId: receipt.cashierId && roles.has(receipt.cashierId) ? receipt.cashierId : null,
+        // Attribute to the authenticated till, not whatever the client claims.
+        deviceId: device.id,
+        date: new Date(receipt.date),
+        subtotal: receipt.subtotal,
+        discount: receipt.discount,
+        total: receipt.total,
+        paymentMethod: receipt.paymentMethod,
+        // Recomputed from payments by refreshReceiptBalance.
+        status: "PENDING",
+        notes: receipt.notes ?? null,
+        createdAt: new Date(receipt.createdAt),
+        updatedAt: new Date(receipt.updatedAt),
+        items: {
+          create: receipt.items.map((item) => ({
+            id: item.id,
+            serviceId: item.serviceId?.startsWith("manual-") ? null : (item.serviceId ?? null),
+            serviceName: item.serviceName,
+            serviceCategory: item.serviceCategory,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            amount: roundMoney(item.quantity * item.unitPrice),
+            createdAt: new Date(item.createdAt),
+          })),
+        },
+      },
+    });
+    await refreshReceiptBalance(tx, receipt.id);
+  });
   return ok(receipt.id);
+}
+
+export type VoidResult =
+  | { ok: true; receipt: { id: string; receiptNumber: string; voidedAt: Date; voidReason: string } }
+  | { ok: false; error: string; status: number };
+
+/** Void a stored receipt on behalf of a verified admin (web, or till override). */
+export async function voidReceiptOnServer(
+  receiptId: string,
+  adminId: string,
+  reason: string,
+  source: "web" | "till",
+  ipAddress?: string | null,
+): Promise<VoidResult> {
+  const trimmed = reason.trim();
+  if (trimmed.length < 3) return { ok: false, error: "Enter a reason for voiding.", status: 400 };
+
+  const voidedAt = new Date();
+  const outcome = await prisma.$transaction(
+    async (tx): Promise<{ error: string; status: number } | { receiptNumber: string }> => {
+      const found = await tx.receipt.findUnique({ where: { id: receiptId }, select: { id: true } });
+      if (!found) return { error: "Receipt not found on the server. Sync the till and try again.", status: 404 };
+      await lockReceipt(tx, receiptId);
+      const receipt = await tx.receipt.findUniqueOrThrow({ where: { id: receiptId } });
+      if (receipt.voidedAt) return { error: "This receipt is already voided.", status: 409 };
+      await tx.receipt.update({
+        where: { id: receiptId },
+        data: { voidedAt, voidedById: adminId, voidReason: trimmed, updatedAt: voidedAt },
+      });
+      await refreshReceiptBalance(tx, receiptId);
+      return { receiptNumber: receipt.receiptNumber };
+    },
+  );
+  if ("error" in outcome) return { ok: false, ...outcome };
+
+  await audit("receipt.voided", {
+    actorId: adminId,
+    entityType: "Receipt",
+    entityId: receiptId,
+    details: { receiptNumber: outcome.receiptNumber, reason: trimmed, source },
+    ipAddress,
+  });
+  return {
+    ok: true,
+    receipt: { id: receiptId, receiptNumber: outcome.receiptNumber, voidedAt, voidReason: trimmed },
+  };
 }
 
 export async function handlePush(body: PushRequest, device: Device): Promise<PushResponse> {
@@ -212,6 +259,10 @@ export async function handlePush(body: PushRequest, device: Device): Promise<Pus
 
   // Customers and services: last write wins on the client's updatedAt.
   for (const customer of body.customers) {
+    if (isFromFuture(customer.updatedAt, customer.createdAt, customer.deletedAt)) {
+      response.customers.push(fail(customer.id, FUTURE_ERROR, true));
+      continue;
+    }
     const existing = await prisma.customer.findUnique({
       where: { id: customer.id },
       select: { updatedAt: true },
@@ -234,6 +285,10 @@ export async function handlePush(body: PushRequest, device: Device): Promise<Pus
   }
 
   for (const service of body.services) {
+    if (isFromFuture(service.updatedAt, service.createdAt, service.deletedAt)) {
+      response.services.push(fail(service.id, FUTURE_ERROR, true));
+      continue;
+    }
     const existing = await prisma.service.findUnique({
       where: { id: service.id },
       select: { updatedAt: true },
@@ -256,7 +311,7 @@ export async function handlePush(body: PushRequest, device: Device): Promise<Pus
   }
 
   const roles = await existingUserIds([
-    ...body.receipts.flatMap((receipt) => [receipt.cashierId, receipt.voidedById]),
+    ...body.receipts.map((receipt) => receipt.cashierId),
     ...body.payments.map((payment) => payment.cashierId),
   ]);
 
@@ -272,23 +327,40 @@ export async function handlePush(body: PushRequest, device: Device): Promise<Pus
   // Payments are append-only; replays of a known id are acknowledged.
   for (const payment of body.payments) {
     try {
-      const existing = await prisma.payment.findUnique({
-        where: { id: payment.id },
-        select: { id: true },
-      });
-      if (existing) {
-        response.payments.push(ok(payment.id));
+      if (isFromFuture(payment.receivedAt, payment.createdAt)) {
+        response.payments.push(fail(payment.id, FUTURE_ERROR, true));
         continue;
       }
-      const receipt = await prisma.receipt.findUnique({
-        where: { id: payment.receiptId },
-        select: { id: true, voidedAt: true },
-      });
-      if (!receipt) {
-        response.payments.push(fail(payment.id, "Receipt not synced yet.", true));
-        continue;
-      }
-      await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async (tx): Promise<PushResult> => {
+        const known = await tx.payment.findUnique({
+          where: { id: payment.id },
+          select: { receiptId: true },
+        });
+        if (known) {
+          return known.receiptId === payment.receiptId
+            ? ok(payment.id)
+            : fail(payment.id, "Payment id already used on another receipt.");
+        }
+        const found = await tx.receipt.findUnique({
+          where: { id: payment.receiptId },
+          select: { id: true },
+        });
+        if (!found) return fail(payment.id, "Receipt not synced yet.", true);
+
+        await lockReceipt(tx, payment.receiptId);
+        const receipt = await tx.receipt.findUniqueOrThrow({
+          where: { id: payment.receiptId },
+          include: { payments: { select: { amount: true } } },
+        });
+        if (receipt.deviceId !== device.id) {
+          return fail(payment.id, "This receipt belongs to another till.");
+        }
+        if (receipt.voidedAt) return fail(payment.id, "This receipt has been voided.");
+        const paidSoFar = receipt.payments.reduce((sum, p) => sum + toNumber(p.amount), 0);
+        if (receipt.payments.length > 0 && paidSoFar + MONEY_TOLERANCE >= toNumber(receipt.total)) {
+          return fail(payment.id, "This receipt is already fully paid.");
+        }
+
         await tx.payment.create({
           data: {
             id: payment.id,
@@ -301,8 +373,9 @@ export async function handlePush(body: PushRequest, device: Device): Promise<Pus
           },
         });
         await refreshReceiptBalance(tx, payment.receiptId);
+        return ok(payment.id);
       });
-      response.payments.push(ok(payment.id));
+      response.payments.push(result);
     } catch (error) {
       console.error("Failed to sync payment", payment.id, error);
       response.payments.push(fail(payment.id, "Server error while saving payment.", true));
@@ -356,7 +429,7 @@ export async function handlePull(
       take: PULL_LIMIT,
       include: { items: true, payments: true },
     }),
-    prisma.user.findMany({ select: { id: true, name: true, role: true } }),
+    prisma.user.findMany({ select: { id: true, name: true, role: true, isActive: true } }),
     getBusinessSettings(),
   ]);
 

@@ -148,17 +148,15 @@ describe.skipIf(!hasDatabase)("sync", () => {
     expect(await prisma.auditLog.count({ where: { action: "receipt.rejected" } })).toBe(1);
   });
 
-  it("syncs an admin void and refuses one forged by a cashier", async () => {
+  it("refuses voids sent over sync, even when they name a real admin", async () => {
     const { receipt } = await createReceipt({ paymentMethod: "CASH", amountPaid: 600, items: [item] });
     await syncNow();
 
-    // A cashier can't void locally...
-    await expect(voidReceipt(receipt.id, "Oops")).rejects.toThrow(/administrator/);
-    // ...and a forged void from a cashier is refused by the server.
-    const ada = getCashierSession()!;
+    // The reviewer's exploit: a till forges a void attributed to the admin.
+    const boss = await prisma.user.findUniqueOrThrow({ where: { userName: "boss" } });
     await db.receipts.update(receipt.id, {
       voidedAt: new Date().toISOString(),
-      voidedById: ada.userId,
+      voidedById: boss.id,
       voidReason: "forged",
       status: "Cancelled",
       updatedAt: new Date().toISOString(),
@@ -166,24 +164,72 @@ describe.skipIf(!hasDatabase)("sync", () => {
     });
     await syncNow();
     expect((await prisma.receipt.findUniqueOrThrow({ where: { id: receipt.id } })).voidedAt).toBeNull();
-    expect((await db.receipts.get(receipt.id))?.syncStatus).toBe("failed");
+    expect((await db.receipts.get(receipt.id))?.syncError).toMatch(/confirmed online/);
+    expect(await prisma.auditLog.count({ where: { action: "receipt.voided" } })).toBe(0);
+  });
 
-    // A real admin void goes through and is audited.
-    await db.receipts.update(receipt.id, {
-      voidedAt: undefined,
-      voidedById: undefined,
-      voidReason: undefined,
-      status: "Completed",
-      syncStatus: "synced",
+  it("voids through a manager override with the admin's password", async () => {
+    const { receipt } = await createReceipt({ paymentMethod: "CASH", amountPaid: 600, items: [item] });
+
+    // Wrong role / wrong password are refused by the server.
+    await expect(
+      voidReceipt(receipt.id, "Oops", { userName: "ada", password: "cashier-pass" }),
+    ).rejects.toThrow(/administrator/);
+    await expect(
+      voidReceipt(receipt.id, "Oops", { userName: "boss", password: "nope" }),
+    ).rejects.toThrow(/Incorrect/);
+
+    // The receipt wasn't synced yet; the override uploads it first.
+    const voided = await voidReceipt(receipt.id, "Customer cancelled order", {
+      userName: "boss",
+      password: "admin-pass",
     });
-    signOutOfTill();
-    await signInToTill("boss", "admin-pass");
-    await voidReceipt(receipt.id, "Customer cancelled order");
-    await syncNow();
-    const voided = await prisma.receipt.findUniqueOrThrow({ where: { id: receipt.id } });
-    expect(voided.status).toBe("CANCELLED");
-    expect(voided.voidReason).toBe("Customer cancelled order");
+    expect(voided).toMatchObject({ status: "Cancelled", syncStatus: "synced" });
+    const server = await prisma.receipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+      include: { voidedBy: true },
+    });
+    expect(server.status).toBe("CANCELLED");
+    expect(server.voidedBy?.userName).toBe("boss");
     expect(await prisma.auditLog.count({ where: { action: "receipt.voided" } })).toBe(1);
+
+    // Payments can't be added to a voided receipt, even by a forged push.
+    await db.payments.add({
+      id: crypto.randomUUID(),
+      receiptId: receipt.id,
+      amount: 100,
+      method: "CASH",
+      receivedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      syncStatus: "pending",
+    });
+    await syncNow();
+    expect(await prisma.payment.count({ where: { receiptId: receipt.id } })).toBe(1);
+  });
+
+  it("rejects another till's receipt numbers and future-dated records", async () => {
+    const squat = await createReceipt({ paymentMethod: "CASH", amountPaid: 600, items: [item] });
+    await db.receipts.update(squat.receipt.id, { receiptNumber: "QFLC-T9-000001" });
+    const future = await createReceipt({ paymentMethod: "CASH", amountPaid: 600, items: [item] });
+    const nextYear = new Date(Date.now() + 365 * 86_400_000).toISOString();
+    await db.receipts.update(future.receipt.id, { date: nextYear, updatedAt: nextYear });
+
+    await syncNow();
+    expect((await db.receipts.get(squat.receipt.id))?.syncError).toMatch(/must start with QFLC-T1-/);
+    // Clock problems stay pending so they sync once the clock is fixed.
+    const futureLocal = await db.receipts.get(future.receipt.id);
+    expect(futureLocal?.syncStatus).toBe("pending");
+    expect(futureLocal?.syncError).toMatch(/clock/);
+    expect(await prisma.receipt.count()).toBe(0);
+  });
+
+  it("removes a deactivated cashier from the till on the next sync", async () => {
+    await prisma.user.update({ where: { userName: "ada" }, data: { isActive: false } });
+    await syncNow();
+    expect(getCashierSession()).toBeNull();
+    expect(await db.users.where("userName").equals("ada").count()).toBe(0);
+    expect(await db.users.where("userName").equals("boss").count()).toBe(1);
   });
 
   it("restores history onto a freshly installed till", async () => {

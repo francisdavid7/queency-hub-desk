@@ -44,6 +44,8 @@ function ReceiptActionsPanel({ receipt }: { receipt: Receipt }) {
   const [isPaying, setIsPaying] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [adminUserName, setAdminUserName] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [isVoiding, setIsVoiding] = useState(false);
 
   const isVoided = receipt.status === "Cancelled";
@@ -67,10 +69,14 @@ function ReceiptActionsPanel({ receipt }: { receipt: Receipt }) {
   const handleVoid = async () => {
     setIsVoiding(true);
     try {
-      await voidReceipt(receipt.id, reason);
+      await voidReceipt(receipt.id, reason, {
+        userName: adminUserName,
+        password: adminPassword,
+      });
       toast.success("Receipt voided", { description: receipt.receiptNumber });
       setVoidOpen(false);
       setReason("");
+      setAdminPassword("");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to void receipt");
     } finally {
@@ -147,12 +153,15 @@ function ReceiptActionsPanel({ receipt }: { receipt: Receipt }) {
         </div>
       )}
 
-      {!isVoided && session?.role === "ADMIN" && (
+      {!isVoided && (
         <Button
           type="button"
           variant="ghost"
           className="w-full gap-2 text-destructive hover:text-destructive"
-          onClick={() => setVoidOpen(true)}
+          onClick={() => {
+            setAdminUserName(session?.role === "ADMIN" ? session.userName : "");
+            setVoidOpen(true);
+          }}
         >
           <Ban className="size-4" />
           Void receipt
@@ -170,7 +179,8 @@ function ReceiptActionsPanel({ receipt }: { receipt: Receipt }) {
             <DialogTitle>Void receipt {receipt.receiptNumber}?</DialogTitle>
             <DialogDescription>
               The receipt stays in the history marked as VOID and no longer
-              counts toward revenue. This is recorded in the audit log.
+              counts toward revenue. An administrator must confirm with their
+              password (needs internet). This is recorded in the audit log.
             </DialogDescription>
           </DialogHeader>
           <Input
@@ -180,6 +190,23 @@ function ReceiptActionsPanel({ receipt }: { receipt: Receipt }) {
             maxLength={300}
             onChange={(event) => setReason(event.target.value)}
           />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Input
+              placeholder="Admin username"
+              autoComplete="off"
+              value={adminUserName}
+              onChange={(event) => setAdminUserName(event.target.value)}
+              aria-label="Admin username"
+            />
+            <Input
+              type="password"
+              placeholder="Admin password"
+              autoComplete="off"
+              value={adminPassword}
+              onChange={(event) => setAdminPassword(event.target.value)}
+              aria-label="Admin password"
+            />
+          </div>
           <DialogFooter>
             <DialogClose
               render={
@@ -191,7 +218,9 @@ function ReceiptActionsPanel({ receipt }: { receipt: Receipt }) {
             <Button
               type="button"
               variant="destructive"
-              disabled={isVoiding || reason.trim().length < 3}
+              disabled={
+                isVoiding || reason.trim().length < 3 || !adminUserName.trim() || !adminPassword
+              }
               onClick={() => void handleVoid()}
             >
               {isVoiding ? "Voiding..." : "Void receipt"}

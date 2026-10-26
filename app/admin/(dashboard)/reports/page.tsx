@@ -1,5 +1,6 @@
 import { Download } from "lucide-react";
 
+import { requireAdmin } from "@/lib/auth/session";
 import { BarChart, PageHeader, RangeFilter, StatCard } from "@/components/admin/widgets";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -41,6 +42,8 @@ function Breakdown({ title, rows }: { title: string; rows: Array<{ name: string;
 }
 
 export default async function ReportsPage({ searchParams }: { searchParams: SearchParams }) {
+  // Pages can render without their layout, so each checks auth itself.
+  await requireAdmin();
   const params = await searchParams;
   const range = resolveRange({ range: one(params.range), from: one(params.from), to: one(params.to) });
   const report = await getReport(range);

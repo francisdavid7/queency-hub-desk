@@ -168,8 +168,10 @@ describe("recordPayment", () => {
     await expect(recordPayment(receipt.id, "CASH", 10)).rejects.toThrow(/fully paid/);
 
     const pending = await createReceipt({ ...baseInput, amountPaid: 0 });
-    setCashierSession({ ...TEST_CASHIER, role: "ADMIN" });
-    await voidReceipt(pending.receipt.id, "Customer cancelled");
+    await db.receipts.update(pending.receipt.id, {
+      status: "Cancelled",
+      voidedAt: new Date().toISOString(),
+    });
     await expect(recordPayment(pending.receipt.id, "CASH", 10)).rejects.toThrow(/voided/);
   });
 
@@ -180,22 +182,13 @@ describe("recordPayment", () => {
 });
 
 describe("voidReceipt", () => {
-  it("only lets admins void, and requires a reason", async () => {
+  it("validates locally before contacting the server", async () => {
     const { receipt } = await createReceipt(baseInput);
-    await expect(voidReceipt(receipt.id, "Mistake")).rejects.toThrow(/administrator/);
+    const admin = { userName: "boss", password: "x" };
+    await expect(voidReceipt(receipt.id, " ", admin)).rejects.toThrow(/reason/);
+    await expect(voidReceipt("missing", "Mistake", admin)).rejects.toThrow(/not found/);
 
-    setCashierSession({ ...TEST_CASHIER, role: "ADMIN" });
-    await expect(voidReceipt(receipt.id, " ")).rejects.toThrow(/reason/);
-
-    const voided = await voidReceipt(receipt.id, "Duplicate entry");
-    expect(voided).toMatchObject({
-      status: "Cancelled",
-      voidReason: "Duplicate entry",
-      voidedById: TEST_CASHIER.userId,
-      syncStatus: "pending",
-    });
-    // Voided receipts are kept, never deleted.
-    expect(await db.receipts.count()).toBe(1);
-    await expect(voidReceipt(receipt.id, "Again")).rejects.toThrow(/already voided/);
+    await db.receipts.update(receipt.id, { voidedAt: new Date().toISOString() });
+    await expect(voidReceipt(receipt.id, "Again", admin)).rejects.toThrow(/already voided/);
   });
 });

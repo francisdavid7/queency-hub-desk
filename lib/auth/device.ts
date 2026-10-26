@@ -24,7 +24,12 @@ export async function authenticateDevice(request: Request) {
   return device;
 }
 
+/** Next unused till code (T1, T2, ...). Codes are unique and never reused. */
 export async function nextDeviceCode() {
-  const count = await prisma.device.count();
-  return `T${count + 1}`;
+  const devices = await prisma.device.findMany({ select: { code: true } });
+  const highest = devices.reduce((max, { code }) => {
+    const number = Number(/^T(\d+)$/.exec(code)?.[1] ?? 0);
+    return Math.max(max, number);
+  }, 0);
+  return `T${highest + 1}`;
 }

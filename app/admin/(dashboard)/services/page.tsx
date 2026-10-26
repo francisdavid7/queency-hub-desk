@@ -1,4 +1,5 @@
 import { ActionForm, SubmitButton } from "@/components/admin/form-controls";
+import { requireAdmin } from "@/lib/auth/session";
 import { PageHeader } from "@/components/admin/widgets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,8 @@ import { formatPrice } from "@/lib/money";
 import prisma from "@/lib/prisma/prisma";
 
 export default async function AdminServicesPage() {
+  // Pages can render without their layout, so each checks auth itself.
+  await requireAdmin();
   const services = await prisma.service.findMany({
     orderBy: [{ deletedAt: { sort: "asc", nulls: "first" } }, { category: "asc" }, { name: "asc" }],
   });

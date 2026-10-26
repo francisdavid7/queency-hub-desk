@@ -2,11 +2,13 @@ import { db, type PaymentMethod, type ReceiptStatus } from "@/db/db";
 import { requireCashierSession } from "@/lib/auth/cashier-session";
 import { getMeta } from "@/lib/meta";
 import { isValidAmount, roundMoney } from "@/lib/money";
+import { RECEIPT_PREFIX } from "@/lib/receipt-number";
+import { syncNow } from "@/lib/sync/client";
 import type { Payment } from "@/types/payment";
 import type { Receipt } from "@/types/receipt";
 import type { ReceiptItem } from "@/types/receipt-item";
 
-export const RECEIPT_PREFIX = "QFLC";
+export { RECEIPT_PREFIX };
 
 interface CreateReceiptInput {
   customerId?: string;
@@ -265,31 +267,72 @@ export async function recordPayment(
 }
 
 /**
- * Void a receipt. Receipts are never deleted so every issued number stays
- * accounted for; only admins may void, and a reason is required.
+ * Void a receipt (manager override). Receipts are never deleted so every
+ * issued number stays accounted for. The admin re-enters their password and
+ * the server verifies it, so this needs an internet connection.
  */
-export async function voidReceipt(receiptId: string, reason: string) {
-  const session = requireCashierSession();
-  if (session.role !== "ADMIN") {
-    throw new Error("Only an administrator can void a receipt.");
-  }
+export async function voidReceipt(
+  receiptId: string,
+  reason: string,
+  admin: { userName: string; password: string },
+) {
+  requireCashierSession();
   const trimmedReason = reason.trim();
   if (trimmedReason.length < 3) {
     throw new Error("Enter a reason for voiding this receipt.");
   }
 
-  const receipt = await db.receipts.get(receiptId);
+  let receipt = await db.receipts.get(receiptId);
   if (!receipt) throw new Error(`Receipt ${receiptId} was not found.`);
   if (receipt.voidedAt) throw new Error("This receipt is already voided.");
+
+  const device = await getMeta("device");
+  if (!device) throw new Error("This till is not registered.");
+
+  // The server can only void what it has; upload the receipt first if needed.
+  if (receipt.syncStatus !== "synced") {
+    await syncNow();
+    receipt = await db.receipts.get(receiptId);
+    if (receipt?.syncStatus !== "synced") {
+      throw new Error("Couldn't upload this receipt yet. Check the internet connection and try again.");
+    }
+  }
+
+  let response: Response;
+  try {
+    response = await fetch("/api/receipts/void", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${device.token}`,
+      },
+      body: JSON.stringify({
+        receiptId,
+        userName: admin.userName.trim().toLowerCase(),
+        password: admin.password,
+        reason: trimmedReason,
+      }),
+    });
+  } catch {
+    throw new Error("Voiding needs an internet connection.");
+  }
+  const body = (await response.json().catch(() => ({}))) as {
+    error?: string;
+    voidedAt?: string;
+    voidedById?: string;
+    voidReason?: string;
+  };
+  if (!response.ok) throw new Error(body.error ?? "Unable to void this receipt.");
 
   const now = new Date().toISOString();
   await db.receipts.update(receiptId, {
     status: "Cancelled",
-    voidedAt: now,
-    voidedById: session.userId,
-    voidReason: trimmedReason,
-    updatedAt: now,
-    syncStatus: "pending",
+    voidedAt: body.voidedAt,
+    voidedById: body.voidedById,
+    voidReason: body.voidReason,
+    updatedAt: body.voidedAt ?? now,
+    syncStatus: "synced",
+    syncedAt: now,
   });
   return db.receipts.get(receiptId);
 }

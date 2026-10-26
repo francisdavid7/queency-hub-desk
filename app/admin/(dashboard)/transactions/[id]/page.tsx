@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAdmin } from "@/lib/auth/session";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
@@ -11,6 +12,8 @@ import { getReceiptDetail } from "@/lib/admin/queries";
 import { formatPrice } from "@/lib/money";
 
 export default async function AdminReceiptPage({ params }: { params: Promise<{ id: string }> }) {
+  // Pages can render without their layout, so each checks auth itself.
+  await requireAdmin();
   const { id } = await params;
   const receipt = await getReceiptDetail(id);
   if (!receipt) notFound();

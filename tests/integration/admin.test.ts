@@ -55,10 +55,8 @@ describe.skipIf(!hasDatabase)("admin dashboard queries", () => {
       amountPaid: 300,
       items: [line("Lamination", 2, 150, "Finishing")],
     });
-    signOutOfTill();
-    await signInToTill("boss", "admin-pass");
-    await voidReceipt(voided.receipt.id, "Entered twice");
     await syncNow();
+    await voidReceipt(voided.receipt.id, "Entered twice", { userName: "boss", password: "admin-pass" });
   });
 
   it("summarises today's sales, collections, balances and voids", async () => {

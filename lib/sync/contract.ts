@@ -116,7 +116,7 @@ export interface PullResponse {
   customers: SyncCustomer[];
   services: SyncService[];
   receipts: PulledReceipt[];
-  staff: Array<{ id: string; name: string; role: "ADMIN" | "CASHIER" }>;
+  staff: Array<{ id: string; name: string; role: "ADMIN" | "CASHIER"; isActive: boolean }>;
   settings: {
     businessName: string;
     address: string | null;

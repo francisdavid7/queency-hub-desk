@@ -1,4 +1,5 @@
 import { ActionForm, SubmitButton } from "@/components/admin/form-controls";
+import { requireAdmin } from "@/lib/auth/session";
 import { PageHeader } from "@/components/admin/widgets";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,8 @@ const fields = [
 ] as const;
 
 export default async function AdminSettingsPage() {
+  // Pages can render without their layout, so each checks auth itself.
+  await requireAdmin();
   const settings = await getBusinessSettings();
   return (
     <>

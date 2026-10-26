@@ -59,7 +59,7 @@ export function resolveRange(
     };
   }
 
-  const preset = (params.range && params.range in PRESET_LABELS
+  const preset = (params.range && Object.hasOwn(PRESET_LABELS, params.range)
     ? params.range
     : "30d") as Exclude<RangePreset, "custom">;
   const daysBack = (days: number) => new Date(todayStart.getTime() - (days - 1) * DAY_MS);

@@ -1,4 +1,5 @@
 import { formatDateTime, PageHeader, Pagination } from "@/components/admin/widgets";
+import { requireAdmin } from "@/lib/auth/session";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -38,6 +39,8 @@ function describe(details: unknown) {
 }
 
 export default async function AuditLogPage({ searchParams }: { searchParams: SearchParams }) {
+  // Pages can render without their layout, so each checks auth itself.
+  await requireAdmin();
   const params = await searchParams;
   const action = one(params.action);
   const page = Number(one(params.page)) || 1;

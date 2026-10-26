@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { requireAdmin } from "@/lib/auth/session";
 import {
   BarChart,
   formatDateTime,
@@ -18,6 +19,8 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const one = (value: string | string[] | undefined) => (typeof value === "string" ? value : undefined);
 
 export default async function AdminOverviewPage({ searchParams }: { searchParams: SearchParams }) {
+  // Pages can render without their layout, so each checks auth itself.
+  await requireAdmin();
   const params = await searchParams;
   const range = resolveRange({ range: one(params.range) ?? "today", from: one(params.from), to: one(params.to) });
   // Chart always shows at least the last 30 days for context.

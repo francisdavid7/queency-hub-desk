@@ -4,6 +4,7 @@ export interface StaffMember {
   id: string;
   name: string;
   role: "ADMIN" | "CASHIER";
+  isActive?: boolean;
 }
 
 export interface DeviceRegistration {

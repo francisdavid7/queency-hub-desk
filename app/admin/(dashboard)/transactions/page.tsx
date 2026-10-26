@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAdmin } from "@/lib/auth/session";
 import { Download } from "lucide-react";
 
 import {
@@ -27,6 +28,8 @@ const one = (value: string | string[] | undefined) => (typeof value === "string"
 const fieldClass = "h-9 rounded-md border border-input bg-background px-2 text-sm";
 
 export default async function AdminTransactionsPage({ searchParams }: { searchParams: SearchParams }) {
+  // Pages can render without their layout, so each checks auth itself.
+  await requireAdmin();
   const params = await searchParams;
   const filters = {
     range: one(params.range),
