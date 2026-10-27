@@ -47,7 +47,7 @@ export function useSearchField() {
 
   // Guard clause to ensure hook is called within its provider boundaries
   if (!context) {
-    throw new Error("useSearchField must be used within a ThemeProvider");
+    throw new Error("useSearchField must be used within a SearchFieldProvider");
   }
 
   return context;

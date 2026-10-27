@@ -15,16 +15,15 @@ interface ReceiptReviewStepProps {
   cart: ReceiptCart;
   notes: string;
   onNotesChange: (notes: string) => void;
+  discount: string;
+  onDiscountChange: (discount: string) => void;
+  /** The receipt is already saved; items and discount can no longer change. */
+  locked?: boolean;
   onBack: () => void;
   onContinue: () => void;
 }
 
-const formatPrice = (price: number) =>
-  new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 2,
-  }).format(price);
+import { formatPrice, roundMoney } from "@/lib/money";
 
 function ReceiptReviewStep({
   customer,
@@ -32,14 +31,21 @@ function ReceiptReviewStep({
   cart,
   notes,
   onNotesChange,
+  discount,
+  onDiscountChange,
+  locked = false,
   onBack,
   onContinue,
 }: ReceiptReviewStepProps) {
   const cartServices = cart.filter((item) => item.quantity > 0);
-  const total = cartServices.reduce(
-    (sum, item) => sum + item.unitPrice * item.quantity,
-    0,
+  const subtotal = roundMoney(
+    cartServices.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
   );
+  const discountValue = Number(discount) || 0;
+  const discountInvalid =
+    discount.trim() !== "" &&
+    (!/^\d+(\.\d{1,2})?$/.test(discount.trim()) || discountValue > subtotal);
+  const total = roundMoney(subtotal - Math.min(discountValue, subtotal));
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
@@ -117,9 +123,45 @@ function ReceiptReviewStep({
             />
           </div>
 
-          <div className="flex justify-between border-t border-border pt-4 text-lg font-bold">
-            <span>Total</span>
-            <span className="tabular-nums">{formatPrice(total)}</span>
+          <div className="space-y-2">
+            <label htmlFor="receipt-discount" className="text-sm font-medium">
+              Discount (₦, optional)
+            </label>
+            <Input
+              id="receipt-discount"
+              inputMode="decimal"
+              value={discount}
+              onChange={(event) => onDiscountChange(event.target.value)}
+              placeholder="0.00"
+              disabled={locked}
+              aria-invalid={discountInvalid}
+            />
+            {discountInvalid && (
+              <p className="text-sm text-destructive">
+                Enter an amount up to {formatPrice(subtotal)}.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1 border-t border-border pt-4">
+            {discountValue > 0 && (
+              <>
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span className="tabular-nums">{formatPrice(subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Discount</span>
+                  <span className="tabular-nums">
+                    −{formatPrice(Math.min(discountValue, subtotal))}
+                  </span>
+                </div>
+              </>
+            )}
+            <div className="flex justify-between text-lg font-bold">
+              <span>Total</span>
+              <span className="tabular-nums">{formatPrice(total)}</span>
+            </div>
           </div>
 
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
@@ -127,7 +169,7 @@ function ReceiptReviewStep({
               <ArrowLeft className="size-4" />
               Back to Services
             </Button>
-            <Button type="button" onClick={onContinue}>
+            <Button type="button" onClick={onContinue} disabled={discountInvalid}>
               Continue to Payment
               <ArrowRight className="size-4" />
             </Button>

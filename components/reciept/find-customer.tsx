@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/db/db";
+import { activeCustomers } from "@/db/db";
 import CreateCustomer from "./create-customer";
 import { useSearchField } from "@/hooks/custom/use-search-field";
 import CustomerList from "./customer-list";
@@ -17,12 +17,12 @@ function FindCustomer({ onWalkIn }: { onWalkIn: () => void }) {
   const { setIsDialogOpen } = useSearchField();
   const { selectedCustomerId, setSelectedCustomerId } = useSearchField();
 
-  const customers = useLiveQuery(() => db.customers.toArray(), [], []);
+  const customers = useLiveQuery(() => activeCustomers().toArray(), [], []);
   const searchedCustomers = useLiveQuery(async () => {
     const query = searchField.trim().toLowerCase();
     if (!query) return [];
 
-    return db.customers
+    return activeCustomers()
       .filter((customer) => {
         const name =
           customer.name && customer.name.toLowerCase().includes(query);

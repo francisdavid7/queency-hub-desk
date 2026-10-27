@@ -16,4 +16,5 @@ export interface ReceiptItem {
 
   syncStatus: SyncStatus;
   syncedAt?: string;
+  syncError?: string;
 }

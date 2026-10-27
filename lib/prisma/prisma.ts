@@ -7,6 +7,8 @@ const globalForPrisma = globalThis as unknown as {
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
+  // Keep each serverless instance's pool small; Supabase's pooler multiplexes.
+  max: Number(process.env.DATABASE_POOL_MAX) || 5,
 });
 
 const prisma =

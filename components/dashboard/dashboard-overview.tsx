@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { db } from "@/db/db";
+import { activeCustomers, activeServices, db } from "@/db/db";
 import type { Receipt } from "@/types/receipt";
 
 const formatPrice = (amount: number) =>
@@ -46,8 +46,8 @@ function changeLabel(current: number, previous: number) {
 
 function DashboardOverview() {
   const receipts = useLiveQuery(() => db.receipts.toArray(), [], []);
-  const customers = useLiveQuery(() => db.customers.toArray(), [], []);
-  const services = useLiveQuery(() => db.services.toArray(), [], []);
+  const customers = useLiveQuery(() => activeCustomers().toArray(), [], []);
+  const services = useLiveQuery(() => activeServices().toArray(), [], []);
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
 
   useEffect(() => {

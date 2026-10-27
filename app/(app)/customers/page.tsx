@@ -34,7 +34,11 @@ import type { Customer } from "@/types/customer";
 
 function CustomersPage() {
   const customers = useLiveQuery(
-    () => db.customers.orderBy("name").toArray(),
+    () =>
+      db.customers
+        .orderBy("name")
+        .filter((customer) => !customer.deletedAt)
+        .toArray(),
     [],
     [],
   );

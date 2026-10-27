@@ -34,7 +34,6 @@ export const updateCustomer = async (
     email: customerData.email?.trim() || undefined,
     updatedAt: new Date().toISOString(),
     syncStatus: "pending",
-    syncedAt: undefined,
   });
 
   if (updated === 0) {
@@ -47,7 +46,7 @@ export const updateCustomer = async (
 export const deleteCustomer = async (customerId: string) => {
   await db.transaction("rw", db.customers, db.receipts, async () => {
     const customer = await db.customers.get(customerId);
-    if (!customer) {
+    if (!customer || customer.deletedAt) {
       throw new Error(`Customer ${customerId} was not found.`);
     }
 
@@ -61,6 +60,12 @@ export const deleteCustomer = async (customerId: string) => {
       );
     }
 
-    await db.customers.delete(customerId);
+    // Soft delete so the removal reaches the server on the next sync.
+    const now = new Date().toISOString();
+    await db.customers.update(customerId, {
+      deletedAt: now,
+      updatedAt: now,
+      syncStatus: "pending",
+    });
   });
 };

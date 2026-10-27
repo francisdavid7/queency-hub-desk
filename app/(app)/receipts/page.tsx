@@ -4,23 +4,15 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { ArrowUpRight, Eye, ReceiptText, Search, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { ArrowUpRight, Eye, ReceiptText, Search } from "lucide-react";
 
 import Header from "@/components/shared/header";
+import ReceiptActionsPanel from "@/components/reciept/receipt-actions-panel";
 import ReceiptGenerated from "@/components/reciept/receipt-generated";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -31,7 +23,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { db } from "@/db/db";
-import { deleteReceipt } from "@/lib/actions/receipt-actions";
 import type { Receipt } from "@/types/receipt";
 
 const formatPrice = (amount: number) =>
@@ -53,32 +44,14 @@ function ReceiptsPage() {
   const receiptItems = useLiveQuery(() => db.receiptItems.toArray(), [], []);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
-  const [receiptToDelete, setReceiptToDelete] = useState<Receipt | null>(null);
-  const [isDeletingReceipt, setIsDeletingReceipt] = useState(false);
-
-  const handleDeleteReceipt = async () => {
-    if (!receiptToDelete) return;
-    setIsDeletingReceipt(true);
-    try {
-      await deleteReceipt(receiptToDelete.id);
-      toast.success("Receipt deleted", {
-        description: `${receiptToDelete.receiptNumber} has been removed.`,
-      });
-      if (selectedReceipt?.id === receiptToDelete.id) {
-        setSelectedReceipt(null);
-      }
-      setReceiptToDelete(null);
-    } catch (error) {
-      console.error("Failed to delete receipt:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to delete receipt",
-      );
-    } finally {
-      setIsDeletingReceipt(false);
-    }
-  };
-
+  const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(
+    null,
+  );
+  // Read from the live query so payments and voids show immediately.
+  const selectedReceipt =
+    receipts.find((receipt) => receipt.id === selectedReceiptId) ?? null;
+  const setSelectedReceipt = (receipt: Receipt | null) =>
+    setSelectedReceiptId(receipt?.id ?? null);
   const customerById = useMemo(
     () => new Map(customers.map((customer) => [customer.id, customer])),
     [customers],
@@ -117,7 +90,7 @@ function ReceiptsPage() {
     <section className="space-y-6">
       <Header
         heading="Receipts"
-        description="View and print your receipt history."
+        description="View, print, and collect balances on your receipts."
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -262,15 +235,6 @@ function ReceiptsPage() {
                     <Eye className="size-4" />
                     View receipt
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Delete receipt ${receipt.receiptNumber}`}
-                    onClick={() => setReceiptToDelete(receipt)}
-                  >
-                    <Trash2 className="size-4 text-destructive" />
-                  </Button>
                 </div>
               </div>
             );
@@ -364,15 +328,6 @@ function ReceiptsPage() {
                           <Eye className="size-4" />
                           View
                         </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Delete receipt ${receipt.receiptNumber}`}
-                          onClick={() => setReceiptToDelete(receipt)}
-                        >
-                          <Trash2 className="size-4 text-destructive" />
-                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -429,6 +384,7 @@ function ReceiptsPage() {
               )}
               onBack={() => setSelectedReceipt(null)}
               backLabel="Back to receipts"
+              actions={<ReceiptActionsPanel receipt={selectedReceipt} />}
               onNewReceipt={() => {
                 setSelectedReceipt(null);
                 router.push("/receipts/new");
@@ -438,44 +394,6 @@ function ReceiptsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={receiptToDelete !== null}
-        onOpenChange={(open) => {
-          if (!open && !isDeletingReceipt) setReceiptToDelete(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete receipt?</DialogTitle>
-            <DialogDescription>
-              {receiptToDelete
-                ? `Delete receipt ${receiptToDelete.receiptNumber}? Its receipt items will also be deleted. This action cannot be undone.`
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose
-              render={
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={isDeletingReceipt}
-                >
-                  Cancel
-                </Button>
-              }
-            />
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={isDeletingReceipt}
-              onClick={() => void handleDeleteReceipt()}
-            >
-              {isDeletingReceipt ? "Deleting..." : "Delete receipt"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }

@@ -17,12 +17,14 @@ import Header from "@/components/shared/header";
 import GsapTransition from "@/components/shared/gsap-transition";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { db, type PaymentMethod } from "@/db/db";
+import { activeCustomers, db, type PaymentMethod } from "@/db/db";
 import {
   createReceipt,
   updateReceiptPayment,
 } from "@/lib/actions/receipt-actions";
 import { useSearchField } from "@/hooks/custom/use-search-field";
+import { useCashierSession } from "@/hooks/custom/use-cashier-session";
+import { formatPrice, roundMoney } from "@/lib/money";
 import type { Receipt } from "@/types/receipt";
 import type { ReceiptItem } from "@/types/receipt-item";
 
@@ -33,18 +35,12 @@ export type ReceiptStep =
   | "payment"
   | "receipt";
 
-const formatPrice = (price: number) =>
-  new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 2,
-  }).format(price);
-
 function CreateReceipt() {
   const [step, setStep] = useState<ReceiptStep>("customer");
   const [cart, setCart] = useState<ReceiptCart>([]);
   const [isWalkIn, setIsWalkIn] = useState(false);
   const [notes, setNotes] = useState("");
+  const [discount, setDiscount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [amountPaid, setAmountPaid] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -52,20 +48,22 @@ function CreateReceipt() {
   const [savedItems, setSavedItems] = useState<ReceiptItem[]>([]);
   const { selectedCustomerId, setSelectedCustomerId, setSearchField } =
     useSearchField();
-  const customers = useLiveQuery(() => db.customers.toArray(), [], []);
+  const customers = useLiveQuery(() => activeCustomers().toArray(), [], []);
   const services = useLiveQuery(() => db.services.toArray(), [], []);
 
   const selectedCustomer = customers.find(
     (customer) => customer.id === selectedCustomerId,
   );
-  const total = useMemo(
+  const session = useCashierSession();
+  const subtotal = useMemo(
     () =>
-      cart.reduce(
-        (sum, item) => sum + item.unitPrice * item.quantity,
-        0,
+      roundMoney(
+        cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
       ),
     [cart],
   );
+  const discountAmount = Math.min(Math.max(Number(discount) || 0, 0), subtotal);
+  const total = roundMoney(subtotal - discountAmount);
 
   const handleWalkIn = () => {
     setIsWalkIn(true);
@@ -110,6 +108,7 @@ function CreateReceipt() {
           customerId: isWalkIn ? undefined : selectedCustomer?.id,
           paymentMethod,
           amountPaid: Number(amountPaid),
+          discount: discountAmount,
           notes,
           items,
         });
@@ -136,6 +135,7 @@ function CreateReceipt() {
     setCart([]);
     setIsWalkIn(false);
     setNotes("");
+    setDiscount("");
     setPaymentMethod("CASH");
     setAmountPaid("");
     setSavedReceipt(null);
@@ -207,6 +207,9 @@ function CreateReceipt() {
           cart={cart}
           notes={notes}
           onNotesChange={setNotes}
+          discount={discount}
+          onDiscountChange={setDiscount}
+          locked={savedReceipt !== null}
           onBack={() => setStep("services")}
           onContinue={() => {
             if (!amountPaid) setAmountPaid(total.toFixed(2));
@@ -239,6 +242,7 @@ function CreateReceipt() {
           isWalkIn={isWalkIn}
           services={services}
           receiptItems={savedItems}
+          cashierName={session?.name}
           onBack={() => setStep("payment")}
           onNewReceipt={startNewReceipt}
         />

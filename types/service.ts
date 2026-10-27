@@ -6,9 +6,13 @@ export interface Service {
   category: string;
   price: number;
 
+  /** Soft delete marker so the deletion can sync. */
+  deletedAt?: string;
+
   createdAt: string;
   updatedAt: string;
 
   syncStatus: SyncStatus;
   syncedAt?: string;
+  syncError?: string;
 }
